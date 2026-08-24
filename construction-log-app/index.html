@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delmond Site Log</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#1f2a54">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delmond Log">
+<style>
+  :root{
+    --bg:#eef0f4; --card:#ffffff; --text:#1c2333; --muted:#6b7280;
+    --border:#dde1e8; --accent:#1f2a54; --accent-dark:#141a38;
+    --danger:#b3261e; --warn:#8a6d1e; --ok:#3a6b4a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text);
+  }
+  header{
+    background:var(--accent); color:#fff; padding:16px 20px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+  }
+  header h1{margin:0; font-size:20px;}
+  .container{max-width:900px; margin:0 auto; padding:16px 16px 88px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:16px; margin-bottom:16px;
+  }
+  .card h2{margin:0 0 4px; font-size:16px; color:var(--text);}
+  .row{display:flex; gap:16px; flex-wrap:wrap;}
+  .field{flex:1; min-width:150px; padding:10px 0 8px; border-bottom:1px solid var(--border);}
+  label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+  input[type=text], input[type=date], input[type=datetime-local], textarea, select{
+    width:100%; padding:3px 0; border:none; border-radius:0;
+    font-size:15px; font-family:inherit; background:transparent; color:var(--text);
+  }
+  input:focus, select:focus, textarea:focus{outline:none;}
+  textarea{resize:vertical; min-height:60px;}
+  button{
+    background:var(--accent); color:#fff; border:none; border-radius:6px;
+    padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600;
+  }
+  button:hover{background:var(--accent-dark);}
+  button.secondary{background:#fff; color:var(--accent); border:1px solid var(--accent);}
+  button.danger{background:#fff; color:var(--danger); border:1px solid var(--danger);}
+  button.small{padding:5px 10px; font-size:12px;}
+  .photo-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .photo-grid .thumb{position:relative; width:90px; height:90px;}
+  .photo-grid img{width:90px; height:90px; object-fit:cover; border-radius:6px; border:1px solid var(--border);}
+  .thumb .remove{
+    position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff;
+    border:none; border-radius:50%; width:20px; height:20px; font-size:12px; line-height:1;
+    cursor:pointer; padding:0;
+  }
+  .pill{
+    display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  .pill.ok{background:#dcfce7; color:var(--ok);}
+  .pill.warn{background:#fef3c7; color:var(--warn);}
+  .pill.danger{background:#fee2e2; color:var(--danger);}
+  .entry-item{border-bottom:1px solid var(--border);}
+  .entry-item:last-child{border-bottom:none;}
+  .entry-row{display:flex; align-items:flex-start; gap:10px; padding:12px 2px; cursor:pointer;}
+  .entry-row:hover{background:#f7f8fa;}
+  .status-dot{width:10px; height:10px; border-radius:50%; margin-top:5px; flex-shrink:0;}
+  .entry-row-main{flex:1; min-width:0;}
+  .entry-row-title{font-size:14px; font-weight:700; color:var(--text);}
+  .entry-row-sub{font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .entry-row-date{font-size:11px; color:var(--muted); white-space:nowrap; flex-shrink:0; padding-top:2px;}
+  .entry-detail{padding:0 2px 14px;}
+  .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:8px; margin-bottom:10px; cursor:pointer; display:block;}
+  .entry-body{margin-top:8px; font-size:14px; white-space:pre-wrap;}
+  .entry-photos{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .entry-photos img{width:70px; height:70px; object-fit:cover; border-radius:6px; cursor:pointer;}
+  audio{width:100%; margin-top:8px;}
+  .rec-row{display:flex; align-items:center; gap:10px; margin-top:6px;}
+  .rec-dot{width:10px; height:10px; border-radius:50%; background:var(--danger); display:none;}
+  .rec-dot.active{display:inline-block; animation:pulse 1s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
+  .empty{color:var(--muted); font-size:14px; text-align:center; padding:20px;}
+  .progress-bar-outer{background:#e5e7eb; border-radius:999px; height:10px; overflow:hidden;}
+  .progress-bar-inner{background:var(--accent); height:100%; transition:width .2s;}
+  .type-tag{font-size:11px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:5px; white-space:nowrap;}
+  .type-progress{background:#dbeafe; color:#1d4ed8;}
+  .type-issue{background:#fee2e2; color:#b91c1c;}
+  .type-delay{background:#fef3c7; color:#b45309;}
+  .type-damage{background:#fce7f3; color:#a21caf;}
+  .filters{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;}
+  .filters button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:500;}
+  .filters button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .entry-tags{font-size:12px; color:var(--muted); margin-top:4px;}
+  footer{text-align:center; color:var(--muted); font-size:12px; padding:20px;}
+
+  #lockScreen{
+    position:fixed; inset:0; background:var(--accent);
+    display:flex; align-items:center; justify-content:center; z-index:1000;
+  }
+  .lock-box{
+    background:#fff; border-radius:12px; padding:32px 28px; width:280px;
+    text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .lock-box img{width:64px; height:64px; margin-bottom:12px;}
+  .lock-box h2{margin:0 0 4px; font-size:18px; color:var(--text);}
+  .lock-box p{margin:0 0 16px; font-size:12px; color:var(--muted);}
+  #pinInput{
+    width:100%; text-align:center; letter-spacing:8px; font-size:20px;
+    padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;
+  }
+  #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px;}
+  #lockScreen button{width:100%;}
+  .header-actions{display:flex; align-items:center; gap:10px;}
+  .header-actions button{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); font-weight:500;}
+  .header-actions button:hover{background:rgba(255,255,255,.25);}
+
+  .bottom-nav{
+    position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--border);
+    display:flex; z-index:200; padding-bottom:env(safe-area-inset-bottom, 0);
+  }
+  .bottom-nav button{
+    flex:1; background:#fff; color:var(--muted); border:none; border-radius:0;
+    padding:8px 4px 6px; font-size:11px; font-weight:600;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+  }
+  .bottom-nav button .nav-icon{font-size:19px; line-height:1;}
+  .bottom-nav button.active{color:var(--accent);}
+
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px;}
+  .stat-tile{background:#f7f8fa; border:1px solid var(--border); border-radius:8px; padding:10px 12px;}
+  .stat-tile .label{font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.03em;}
+  .stat-tile .value{font-size:22px; font-weight:700; color:var(--accent); margin-top:2px;}
+
+  .bar-row{display:grid; grid-template-columns:90px 1fr 44px; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;}
+  .bar-track{background:#e5e7eb; border-radius:999px; height:12px; overflow:hidden;}
+  .bar-fill{background:var(--accent); height:100%;}
+
+  .pie-wrap{display:flex; align-items:center; gap:20px; flex-wrap:wrap;}
+  .pie-chart{width:140px; height:140px; border-radius:50%; flex-shrink:0; background:#e5e7eb;}
+  .legend{display:flex; flex-direction:column; gap:6px; font-size:13px;}
+  .legend-item{display:flex; align-items:center; gap:6px;}
+  .legend-swatch{width:12px; height:12px; border-radius:3px; flex-shrink:0;}
+
+  .planner-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .planner-table th, .planner-table td{border-bottom:1px solid var(--border); padding:8px 6px; text-align:left; vertical-align:top;}
+  .planner-table th{font-size:11px; text-transform:uppercase; color:var(--muted); font-weight:700;}
+
+  .plan-box{
+    position:relative; width:100%; aspect-ratio:4/3; border:1px solid var(--border); border-radius:8px;
+    background:
+      repeating-linear-gradient(0deg, #f4f5f7, #f4f5f7 19px, #e6e8ec 19px, #e6e8ec 20px),
+      repeating-linear-gradient(90deg, #f4f5f7, #f4f5f7 19px, #e6e8ec 19px, #e6e8ec 20px);
+    cursor:crosshair; overflow:hidden; margin-top:4px;
+  }
+  .plan-box .plan-label{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; color:var(--muted); font-size:12px; font-weight:600; padding:16px;
+    pointer-events:none; line-height:1.4;
+  }
+  .plan-box .plan-image{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+    background:#000; pointer-events:none; display:none;
+  }
+  .plan-marker{
+    position:absolute; width:16px; height:16px; margin-left:-8px; margin-top:-8px; border-radius:50%;
+    background:var(--danger); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
+    pointer-events:none; display:none;
+  }
+  .plan-readout{font-size:12px; color:var(--muted); margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
+  .plan-mini{width:70px; aspect-ratio:4/3; border:1px solid var(--border); border-radius:6px; position:relative; flex-shrink:0;
+    background:repeating-linear-gradient(0deg,#f4f5f7,#f4f5f7 9px,#e6e8ec 9px,#e6e8ec 10px), repeating-linear-gradient(90deg,#f4f5f7,#f4f5f7 9px,#e6e8ec 9px,#e6e8ec 10px);
+  }
+  .plan-mini .plan-marker{width:10px; height:10px; margin-left:-5px; margin-top:-5px;}
+
+  .entry-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .email-panel{margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
+
+  #printReport{display:none;}
+  @media print{
+    body > *:not(#printReport){display:none !important;}
+    #printReport{
+      display:block !important; padding:24px; font-family:-apple-system,Arial,sans-serif; color:#000;
+    }
+    #printReport h1{font-size:20px; margin:0 0 2px;}
+    #printReport .pr-meta{font-size:12px; color:#444; margin-bottom:16px;}
+    #printReport table{width:100%; border-collapse:collapse; margin-bottom:16px;}
+    #printReport td{padding:4px 8px 4px 0; vertical-align:top; font-size:13px;}
+    #printReport td.pr-label{font-weight:700; width:180px; color:#333;}
+    #printReport .pr-photos{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+    #printReport .pr-photos img{width:180px; height:135px; object-fit:cover; border:1px solid #ccc;}
+    #printReport .pr-plan{margin-top:12px;}
+    #printReport .pr-plan img{max-width:420px; display:block; border:1px solid #ccc;}
+  }
+</style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <div class="lock-box">
+    <img src="icons/icon-192.png" alt="Delmond">
+    <h2>Delmond Site Log</h2>
+    <p>Enter PIN to continue</p>
+    <input type="password" id="pinInput" inputmode="numeric" maxlength="4" placeholder="••••">
+    <div id="pinError"></div>
+    <button id="pinSubmitBtn">Unlock</button>
+  </div>
+</div>
+
+<header>
+  <h1>🏗️ Delmond Site Log</h1>
+  <div class="header-actions">
+    <div id="projectPill"></div>
+    <button id="lockBtn" class="small">🔒 Lock</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <div id="logView">
+
+    <div class="card">
+      <h2>AI Voice Assistant Settings</h2>
+      <div class="field">
+        <label>Anthropic API Key (stored only in this browser)</label>
+        <input type="text" id="apiKeyInput" placeholder="sk-ant-...">
+      </div>
+      <button id="saveApiKeyBtn" class="secondary small">Save Key</button>
+      <p style="font-size:12px; color:var(--muted); margin-top:8px;">
+        Used only to tidy up voice-note transcripts into clean descriptions. Get a key from your own Anthropic account. It's stored in this browser's localStorage — fine for solo use, but don't share this file with the key already in it.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Project Details</h2>
+      <div class="row">
+        <div class="field">
+          <label>Project / Site Name</label>
+          <input type="text" id="projectName" placeholder="e.g. 150 Holborn Fit-out">
+        </div>
+        <div class="field">
+          <label>Start Date</label>
+          <input type="date" id="startDate">
+        </div>
+        <div class="field">
+          <label>Finish Date (planned/actual)</label>
+          <input type="date" id="finishDate">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Overall Progress (%)</label>
+          <input type="text" id="progressPercent" placeholder="e.g. 45">
+          <div class="progress-bar-outer" style="margin-top:8px;">
+            <div class="progress-bar-inner" id="progressBarInner" style="width:0%;"></div>
+          </div>
+        </div>
+      </div>
+      <button id="saveProjectBtn">Save Project Details</button>
+    </div>
+
+    <div class="card">
+      <h2>New Log Entry</h2>
+      <div class="row">
+        <div class="field">
+          <label>Entry Type</label>
+          <select id="entryType">
+            <option value="progress">Progress Update</option>
+            <option value="issue">Issue</option>
+            <option value="delay">Delay</option>
+            <option value="damage">Damage by Others</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date & Time</label>
+          <input type="datetime-local" id="entryDateTime">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Level</label>
+        <select id="entryLevel"></select>
+      </div>
+
+      <div id="areaMarkerWrap" style="display:none;">
+        <div class="field" style="border-bottom:none;">
+          <label>Area (tap the plan to drop a pin)</label>
+          <div class="plan-box" id="planBox">
+            <div class="plan-label" id="planLabel"></div>
+            <img class="plan-image" id="planImage" alt="">
+            <div class="plan-marker" id="planMarker"></div>
+          </div>
+          <div class="plan-readout">
+            <span id="planReadout">Tap the plan above to drop a pin.</span>
+            <button type="button" id="clearMarkerBtn" class="secondary small">Clear Pin</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Area Note (optional)</label>
+          <input type="text" id="entryArea" placeholder="e.g. near Zone A, by the core">
+        </div>
+      </div>
+
+      <div class="field" id="taskTypeWrap" style="display:none;">
+        <label>Task Type</label>
+        <select id="entryTaskType"></select>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Progress % (this task)</label>
+          <input type="text" id="entryProgress" placeholder="e.g. 50">
+        </div>
+        <div class="field">
+          <label>Task Start Date</label>
+          <input type="date" id="entryTaskStart">
+        </div>
+        <div class="field">
+          <label>Task Finish Date</label>
+          <input type="date" id="entryTaskFinish">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Handover to Delmond</label>
+          <input type="date" id="entryHandoverToDelmond">
+        </div>
+        <div class="field">
+          <label>Handover back to Main Contractor</label>
+          <input type="date" id="entryHandoverBackContractor">
+        </div>
+      </div>
+      <p style="font-size:12px; color:var(--muted); margin-top:-8px;">
+        Log "Handover to Delmond" now, then log a follow-on entry later for the same Level/Task with "Handover back to Main Contractor" filled in once that happens.
+      </p>
+
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="entryNotes" placeholder="Describe what happened..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Photos</label>
+        <input type="file" id="photoInput" accept="image/*" multiple capture="environment">
+        <div class="photo-grid" id="photoPreview"></div>
+      </div>
+
+      <div class="field">
+        <label>Voice Recording</label>
+        <div class="rec-row">
+          <button type="button" id="recordBtn" class="secondary small">🎙️ Start Recording</button>
+          <span class="rec-dot" id="recDot"></span>
+          <span id="recStatus" style="font-size:12px; color:var(--muted);"></span>
+        </div>
+        <audio id="audioPreview" controls style="display:none;"></audio>
+        <div id="transcriptWrap" style="display:none; margin-top:8px;">
+          <label>Transcript (auto-generated, edit if needed)</label>
+          <textarea id="transcriptText"></textarea>
+          <div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="aiCleanBtn" class="secondary small">✨ AI Clean Up → Description</button>
+            <span id="aiStatus" style="font-size:12px; color:var(--muted);"></span>
+          </div>
+        </div>
+      </div>
+
+      <button id="addEntryBtn">Add Entry</button>
+    </div>
+
+    <div class="card">
+      <h2>Log Entries</h2>
+      <div class="filters" id="filters">
+        <button data-filter="all" class="active">All</button>
+        <button data-filter="progress">Progress</button>
+        <button data-filter="issue">Issues</button>
+        <button data-filter="delay">Delays</button>
+        <button data-filter="damage">Damages</button>
+      </div>
+      <div id="entriesList"></div>
+    </div>
+
+  </div>
+
+  <div id="dashboardView" style="display:none;">
+
+    <div class="card">
+      <h2>Weekly Planner</h2>
+      <div class="row">
+        <div class="field" style="max-width:220px;">
+          <label>Week Ending</label>
+          <input type="date" id="weekEnding">
+        </div>
+      </div>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Average Progress by Level</h2>
+      <div id="progressByLevel"></div>
+    </div>
+
+    <div class="card">
+      <h2>Entry Type Mix</h2>
+      <div class="pie-wrap">
+        <div class="pie-chart" id="typePie"></div>
+        <div class="legend" id="typeLegend"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Planner Table (latest status per Level / Task)</h2>
+      <div style="overflow-x:auto;">
+        <table class="planner-table" id="plannerTable"></table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>Data is stored locally in this browser only (localStorage).</footer>
+
+<nav class="bottom-nav">
+  <button data-tab="log" class="active"><span class="nav-icon">📋</span>Log</button>
+  <button data-tab="dashboard"><span class="nav-icon">📊</span>Dashboard</button>
+</nav>
+
+<div id="printReport"></div>
+
+<script>
+function lsGet(key, fallback){
+  try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
+  catch(e){ console.warn('localStorage unavailable', e); return fallback; }
+}
+function lsSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ console.warn('localStorage unavailable', e); return false; }
+}
+function lsRemove(key){
+  try{ localStorage.removeItem(key); }
+  catch(e){ console.warn('localStorage unavailable', e); }
+}
+
+const SITE_PIN = '2019';
+const LS_AUTHED = 'siteLog.authed';
+
+function showLockScreen(){
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinError').textContent = '';
+  document.getElementById('pinInput').focus();
+}
+function hideLockScreen(){
+  document.getElementById('lockScreen').style.display = 'none';
+}
+
+function attemptUnlock(){
+  const val = document.getElementById('pinInput').value.trim();
+  if(val === SITE_PIN){
+    lsSet(LS_AUTHED, 'true');
+    hideLockScreen();
+  } else {
+    document.getElementById('pinError').textContent = 'Incorrect PIN, try again.';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinInput').focus();
+  }
+}
+
+document.getElementById('pinSubmitBtn').onclick = attemptUnlock;
+document.getElementById('pinInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') attemptUnlock();
+});
+document.getElementById('lockBtn').onclick = () => {
+  lsRemove(LS_AUTHED);
+  showLockScreen();
+};
+
+if(lsGet(LS_AUTHED, null) === 'true'){
+  hideLockScreen();
+} else {
+  showLockScreen();
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch((err) => {
+      console.warn('Service worker registration failed', err);
+    });
+  });
+}
+
+const TASK_TYPES = [
+  'Walls 1st Fix',
+  'Walls 2nd Fix',
+  'MF Ceiling 1st Fix',
+  'MF Ceiling 2nd Fix',
+  'SAS Ceiling 1st Fix',
+  'SAS 2nd Fix',
+  'SAS Tiles',
+  'SAS Service Tiles',
+  'Taping and Jointing',
+  'Plastering',
+  'Snagging Walls',
+  'Snagging Ceilings'
+];
+
+function populateTaskTypeSelect(sel){
+  sel.innerHTML = '<option value="">Select task type…</option>' +
+    TASK_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+populateTaskTypeSelect(document.getElementById('entryTaskType'));
+
+const LEVELS = [
+  'Basement', 'Ground Floor', 'Mezzanine',
+  'Level 1', 'Level 2', 'Level 3', 'Level 4',
+  'Level 5', 'Level 6', 'Level 7', 'Level 8'
+];
+
+function populateLevelSelect(sel){
+  sel.innerHTML = '<option value="">Select level…</option>' +
+    LEVELS.map(l => `<option value="${l}">${l}</option>`).join('');
+}
+populateLevelSelect(document.getElementById('entryLevel'));
+
+const LEVEL_PLANS = {
+  'Level 1': 'plans/level-1.png',
+  'Level 2': 'plans/level-2.png',
+  'Level 3': 'plans/level-3.png',
+  'Level 4': 'plans/level-4.png',
+  'Level 5': 'plans/level-5.png',
+  'Level 6': 'plans/level-6.png',
+  'Level 7': 'plans/level-7.png',
+  'Mezzanine': 'plans/mezzanine.png'
+};
+
+let currentAreaMarker = null;
+
+function updatePlanLabel(level){
+  document.getElementById('planLabel').textContent = level
+    ? `Placeholder plan — ${level} (awaiting site drawing)`
+    : 'Placeholder plan';
+}
+
+function loadLevelPlan(level){
+  const planBox = document.getElementById('planBox');
+  const planImage = document.getElementById('planImage');
+  const planLabel = document.getElementById('planLabel');
+  const planSrc = LEVEL_PLANS[level];
+
+  if(planSrc){
+    planImage.onload = () => {
+      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
+    };
+    planImage.src = planSrc;
+    planImage.style.display = 'block';
+    planLabel.style.display = 'none';
+  } else {
+    planImage.style.display = 'none';
+    planImage.src = '';
+    planBox.style.aspectRatio = '4 / 3';
+    planLabel.style.display = 'flex';
+    updatePlanLabel(level);
+  }
+}
+
+function clearAreaMarker(){
+  currentAreaMarker = null;
+  document.getElementById('planMarker').style.display = 'none';
+  document.getElementById('planReadout').textContent = 'Tap the plan above to drop a pin.';
+}
+
+function setAreaMarker(xPct, yPct){
+  currentAreaMarker = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
+  const marker = document.getElementById('planMarker');
+  marker.style.left = currentAreaMarker.x + '%';
+  marker.style.top = currentAreaMarker.y + '%';
+  marker.style.display = 'block';
+  document.getElementById('planReadout').textContent = `Pin at ${currentAreaMarker.x}%, ${currentAreaMarker.y}%`;
+}
+
+document.getElementById('entryLevel').addEventListener('change', (ev) => {
+  const level = ev.target.value;
+  document.getElementById('taskTypeWrap').style.display = level ? 'block' : 'none';
+  document.getElementById('areaMarkerWrap').style.display = level ? 'block' : 'none';
+  loadLevelPlan(level);
+  clearAreaMarker();
+});
+
+document.getElementById('planBox').addEventListener('click', (ev) => {
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
+  const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
+  setAreaMarker(xPct, yPct);
+});
+
+document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
+
+const LS_PROJECT = 'siteLog.project';
+const LS_ENTRIES = 'siteLog.entries';
+
+let project = JSON.parse(lsGet(LS_PROJECT, '{}'));
+let entries = JSON.parse(lsGet(LS_ENTRIES, '[]'));
+let currentPhotos = [];
+let currentAudio = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let activeFilter = 'all';
+
+function saveProject(){
+  lsSet(LS_PROJECT, JSON.stringify(project));
+}
+function saveEntries(){
+  lsSet(LS_ENTRIES, JSON.stringify(entries));
+}
+
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function nowLocalDateTimeValue(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
+}
+
+function renderProject(){
+  document.getElementById('projectName').value = project.name || '';
+  document.getElementById('startDate').value = project.startDate || '';
+  document.getElementById('finishDate').value = project.finishDate || '';
+  document.getElementById('progressPercent').value = project.progress ?? '';
+  const pct = Math.max(0, Math.min(100, parseInt(project.progress) || 0));
+  document.getElementById('progressBarInner').style.width = pct + '%';
+  document.getElementById('projectPill').textContent = project.name ? project.name : '';
+}
+
+function renderPhotoPreview(){
+  const grid = document.getElementById('photoPreview');
+  grid.innerHTML = '';
+  currentPhotos.forEach((src, i) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.innerHTML = `<img src="${src}"><button class="remove" data-i="${i}">×</button>`;
+    grid.appendChild(div);
+  });
+  grid.querySelectorAll('.remove').forEach(btn => {
+    btn.onclick = () => {
+      currentPhotos.splice(parseInt(btn.dataset.i), 1);
+      renderPhotoPreview();
+    };
+  });
+}
+
+function typeLabel(t){
+  return {progress:'Progress', issue:'Issue', delay:'Delay', damage:'Damage by Others'}[t] || t;
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderEntries(){
+  const list = document.getElementById('entriesList');
+  const filtered = activeFilter === 'all' ? entries : entries.filter(e => e.type === activeFilter);
+  const sorted = [...filtered].sort((a,b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+  if(sorted.length === 0){
+    list.innerHTML = '<div class="empty">No entries yet.</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(e => {
+    const dt = new Date(e.dateTime);
+    const dtDateStr = isNaN(dt) ? e.dateTime : dt.toLocaleDateString();
+    const dtFullStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
+
+    const titleBits = [];
+    if(e.level) titleBits.push(e.level);
+    if(e.taskType) titleBits.push(e.taskType);
+    const title = titleBits.length ? titleBits.join(' · ') : typeLabel(e.type);
+    const subtitle = e.notes ? e.notes : (e.area || 'No notes');
+
+    const photos = e.photos || [];
+    const heroPhoto = photos[0] ? `<img class="entry-hero-photo" src="${photos[0]}" onclick="window.open(this.src)">` : '';
+    const restPhotos = photos.slice(1).map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('');
+    const audioHtml = e.audio ? `<audio controls src="${e.audio}"></audio>` : '';
+
+    const locationBits = [];
+    if(e.level) locationBits.push('Level: ' + escapeHtml(e.level));
+    if(e.area) locationBits.push('Area: ' + escapeHtml(e.area));
+    if(e.taskType) locationBits.push('Task: ' + escapeHtml(e.taskType));
+    const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
+
+    const miniPlanSrc = LEVEL_PLANS[e.level];
+    const miniStyle = miniPlanSrc
+      ? `background-image:url('${miniPlanSrc}'); background-size:cover; background-position:center;`
+      : '';
+    const markerHtml = e.areaMarker ? `
+      <div class="plan-readout" style="margin-top:6px;">
+        <div class="plan-mini" style="${miniStyle}">
+          <div class="plan-marker" style="display:block; left:${e.areaMarker.x}%; top:${e.areaMarker.y}%;"></div>
+        </div>
+        <span>📍 Pin at ${e.areaMarker.x}%, ${e.areaMarker.y}% on ${escapeHtml(e.level || 'level')} plan</span>
+      </div>
+    ` : '';
+
+    const dateBits = [];
+    if(e.progress !== undefined && e.progress !== '') dateBits.push('Progress: ' + escapeHtml(String(e.progress)) + '%');
+    if(e.taskStart) dateBits.push('Task start: ' + e.taskStart);
+    if(e.taskFinish) dateBits.push('Task finish: ' + e.taskFinish);
+    const datesHtml = dateBits.length ? `<div class="entry-tags">${dateBits.join(' · ')}</div>` : '';
+
+    const handoverBits = [];
+    if(e.handoverToDelmond) handoverBits.push('Handover to Delmond: ' + e.handoverToDelmond);
+    if(e.handoverBackContractor) handoverBits.push('Handover back to Main Contractor: ' + e.handoverBackContractor);
+    const handoverHtml = handoverBits.length ? `<div class="entry-tags">${handoverBits.join(' · ')}</div>` : '';
+
+    return `
+      <div class="entry-item">
+        <div class="entry-row" onclick="toggleEntryDetail('${e.id}')">
+          <span class="status-dot" style="background:${TYPE_COLORS[e.type] || '#6b7280'};"></span>
+          <div class="entry-row-main">
+            <div class="entry-row-title">${escapeHtml(title)}</div>
+            <div class="entry-row-sub">${escapeHtml(subtitle)}</div>
+          </div>
+          <div class="entry-row-date">${dtDateStr}</div>
+        </div>
+        <div class="entry-detail" id="detail-${e.id}" style="display:none;">
+          ${heroPhoto}
+          <div class="entry-tags"><span class="type-tag type-${e.type}">${typeLabel(e.type)}</span> &nbsp;${dtFullStr}</div>
+          ${locationHtml}
+          ${markerHtml}
+          ${datesHtml}
+          ${handoverHtml}
+          <div class="entry-body">${e.notes ? escapeHtml(e.notes) : '<em>No notes</em>'}</div>
+          ${restPhotos ? `<div class="entry-photos">${restPhotos}</div>` : ''}
+          ${audioHtml}
+          <div class="entry-actions">
+            <button type="button" class="secondary small" onclick="downloadEntryPdf('${e.id}')">📄 PDF</button>
+            <button type="button" class="secondary small" onclick="toggleEmailPanel('${e.id}')">✉️ Email</button>
+            <button type="button" class="danger small" onclick="deleteEntry('${e.id}')">Delete</button>
+          </div>
+          <div class="email-panel" id="email-${e.id}" style="display:none;">
+            <div class="field">
+              <label>Recipient Email</label>
+              <input type="text" id="emailTo-${e.id}" placeholder="name@company.com">
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+              <button type="button" class="secondary small" onclick="draftEmail('${e.id}')">✨ Draft Email with AI</button>
+              <span id="emailStatus-${e.id}" style="font-size:12px; color:var(--muted);"></span>
+            </div>
+            <div class="field">
+              <label>Subject</label>
+              <input type="text" id="emailSubject-${e.id}">
+            </div>
+            <div class="field">
+              <label>Body</label>
+              <textarea id="emailBody-${e.id}" style="min-height:120px;"></textarea>
+            </div>
+            <button type="button" onclick="openMailto('${e.id}')">📤 Open in Mail App</button>
+            <p style="font-size:11px; color:var(--muted); margin-top:6px;">
+              Opens your device's email app with this drafted message ready to review and send. Email links can't attach files — attach the PDF (📄 above) or photos yourself before sending.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleEntryDetail(id){
+  const el = document.getElementById('detail-' + id);
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+window.toggleEntryDetail = toggleEntryDetail;
+
+function toggleEmailPanel(id){
+  const el = document.getElementById('email-' + id);
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+window.toggleEmailPanel = toggleEmailPanel;
+
+function buildEntrySummaryText(e){
+  const dt = new Date(e.dateTime);
+  const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
+  const lines = [
+    'Project: ' + (project.name || 'Unnamed project'),
+    'Entry type: ' + typeLabel(e.type),
+    'Date/time: ' + dtStr,
+    e.level ? 'Level: ' + e.level : '',
+    e.area ? 'Area note: ' + e.area : '',
+    e.taskType ? 'Task type: ' + e.taskType : '',
+    (e.progress !== undefined && e.progress !== '') ? 'Progress: ' + e.progress + '%' : '',
+    e.taskStart ? 'Task start date: ' + e.taskStart : '',
+    e.taskFinish ? 'Task finish date: ' + e.taskFinish : '',
+    e.handoverToDelmond ? 'Handover to Delmond: ' + e.handoverToDelmond : '',
+    e.handoverBackContractor ? 'Handover back to main contractor: ' + e.handoverBackContractor : '',
+    e.notes ? 'Notes: ' + e.notes : '',
+    (e.photos && e.photos.length) ? 'Photos attached in app: ' + e.photos.length : ''
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+async function draftEmail(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  const apiKey = lsGet(LS_APIKEY, null);
+  const statusEl = document.getElementById('emailStatus-' + id);
+
+  if(!apiKey){
+    alert('Add your Anthropic API key in "AI Voice Assistant Settings" above first.');
+    return;
+  }
+
+  statusEl.textContent = 'Drafting...';
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 500,
+        system: 'You draft short, professional emails summarizing a single construction site log entry for ' + (project.name || 'a construction site') + '. Given the log entry details, write a clear subject line and a concise professional email body suitable for sending to a contractor, consultant or client. Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape: {"subject":"...","body":"..."}',
+        messages: [{ role: 'user', content: buildEntrySummaryText(e) }]
+      })
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error('API error ' + res.status + ': ' + errText.slice(0, 200));
+    }
+    const data = await res.json();
+    const raw = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+    let parsed;
+    try{
+      parsed = JSON.parse(raw);
+    }catch(parseErr){
+      throw new Error('Could not parse the AI response.');
+    }
+    document.getElementById('emailSubject-' + id).value = parsed.subject || '';
+    document.getElementById('emailBody-' + id).value = parsed.body || '';
+    statusEl.textContent = 'Draft ready — review before sending.';
+  }catch(err){
+    statusEl.textContent = '';
+    alert('AI draft failed: ' + err.message);
+  }
+}
+window.draftEmail = draftEmail;
+
+function openMailto(id){
+  const to = document.getElementById('emailTo-' + id).value.trim();
+  const subject = document.getElementById('emailSubject-' + id).value;
+  const body = document.getElementById('emailBody-' + id).value;
+
+  if(!to){
+    alert('Enter a recipient email address first.');
+    return;
+  }
+
+  const mailto = 'mailto:' + encodeURIComponent(to) +
+    '?subject=' + encodeURIComponent(subject) +
+    '&body=' + encodeURIComponent(body);
+  window.location.href = mailto;
+}
+window.openMailto = openMailto;
+
+function buildEntryReportHtml(e){
+  const dt = new Date(e.dateTime);
+  const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
+  const rows = [];
+  const addRow = (label, value) => {
+    if(value === '' || value === undefined || value === null) return;
+    rows.push(`<tr><td class="pr-label">${escapeHtml(label)}</td><td>${escapeHtml(String(value))}</td></tr>`);
+  };
+
+  addRow('Entry type', typeLabel(e.type));
+  addRow('Date & time', dtStr);
+  addRow('Level', e.level);
+  addRow('Area note', e.area);
+  addRow('Task type', e.taskType);
+  addRow('Progress', (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '');
+  addRow('Task start date', e.taskStart);
+  addRow('Task finish date', e.taskFinish);
+  addRow('Handover to Delmond', e.handoverToDelmond);
+  addRow('Handover back to Main Contractor', e.handoverBackContractor);
+
+  const photosHtml = (e.photos && e.photos.length)
+    ? `<div class="pr-photos">${e.photos.map(p => `<img src="${p}">`).join('')}</div>`
+    : '';
+
+  const planImgUrl = LEVEL_PLANS[e.level];
+  const planHtml = (e.areaMarker && planImgUrl) ? `
+    <div class="pr-plan">
+      <div><strong>Area pin</strong></div>
+      <div style="position:relative; display:inline-block;">
+        <img src="${planImgUrl}">
+        <div style="position:absolute; left:${e.areaMarker.x}%; top:${e.areaMarker.y}%; width:12px; height:12px; margin-left:-6px; margin-top:-6px; border-radius:50%; background:#b3261e; border:2px solid #fff;"></div>
+      </div>
+    </div>
+  ` : '';
+
+  const audioNote = e.audio
+    ? '<p style="font-size:12px; color:#666;">🎙️ A voice recording is attached to this entry in the app (not included in this PDF).</p>'
+    : '';
+
+  return `
+    <h1>${escapeHtml(project.name || 'Site Log')}</h1>
+    <div class="pr-meta">Delmond Site Log — Entry Report</div>
+    <table>${rows.join('')}</table>
+    <div><strong>Notes</strong></div>
+    <p style="white-space:pre-wrap; font-size:13px;">${e.notes ? escapeHtml(e.notes) : 'No notes.'}</p>
+    ${planHtml}
+    ${photosHtml}
+    ${audioNote}
+  `;
+}
+
+function downloadEntryPdf(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  document.getElementById('printReport').innerHTML = buildEntryReportHtml(e);
+  window.print();
+}
+window.downloadEntryPdf = downloadEntryPdf;
+
+function deleteEntry(id){
+  if(!confirm('Delete this entry?')) return;
+  entries = entries.filter(e => e.id !== id);
+  saveEntries();
+  renderEntries();
+  renderDashboard();
+}
+window.deleteEntry = deleteEntry;
+
+document.getElementById('saveProjectBtn').onclick = () => {
+  project = {
+    name: document.getElementById('projectName').value,
+    startDate: document.getElementById('startDate').value,
+    finishDate: document.getElementById('finishDate').value,
+    progress: document.getElementById('progressPercent').value
+  };
+  saveProject();
+  renderProject();
+};
+
+document.getElementById('photoInput').onchange = async (ev) => {
+  const files = Array.from(ev.target.files);
+  for(const f of files){
+    const dataUrl = await fileToDataUrl(f);
+    currentPhotos.push(dataUrl);
+  }
+  ev.target.value = '';
+  renderPhotoPreview();
+};
+
+const LS_APIKEY = 'siteLog.apiKey';
+document.getElementById('apiKeyInput').value = lsGet(LS_APIKEY, '');
+document.getElementById('saveApiKeyBtn').onclick = () => {
+  lsSet(LS_APIKEY, document.getElementById('apiKeyInput').value.trim());
+  alert('API key saved to this browser.');
+};
+
+const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let finalTranscript = '';
+
+function setupRecognition(){
+  const r = new SpeechRecognitionImpl();
+  r.continuous = true;
+  r.interimResults = true;
+  r.lang = 'en-GB';
+  r.onresult = (ev) => {
+    let interim = '';
+    for(let i = ev.resultIndex; i < ev.results.length; i++){
+      const piece = ev.results[i][0].transcript;
+      if(ev.results[i].isFinal){
+        finalTranscript += piece + ' ';
+      } else {
+        interim += piece;
+      }
+    }
+    document.getElementById('transcriptText').value = (finalTranscript + interim).trim();
+  };
+  r.onerror = (e) => console.warn('Speech recognition error', e.error);
+  return r;
+}
+
+document.getElementById('recordBtn').onclick = async () => {
+  const btn = document.getElementById('recordBtn');
+  const dot = document.getElementById('recDot');
+  const status = document.getElementById('recStatus');
+
+  if(mediaRecorder && mediaRecorder.state === 'recording'){
+    mediaRecorder.stop();
+    if(recognition) recognition.stop();
+    return;
+  }
+
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    finalTranscript = '';
+    document.getElementById('transcriptText').value = '';
+    document.getElementById('transcriptWrap').style.display = SpeechRecognitionImpl ? 'block' : 'none';
+
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = () => {
+        currentAudio = reader.result;
+        const audioEl = document.getElementById('audioPreview');
+        audioEl.src = currentAudio;
+        audioEl.style.display = 'block';
+      };
+      reader.readAsDataURL(blob);
+      stream.getTracks().forEach(t => t.stop());
+      btn.textContent = '🎙️ Start Recording';
+      dot.classList.remove('active');
+      status.textContent = 'Recording saved';
+    };
+    mediaRecorder.start();
+
+    if(SpeechRecognitionImpl){
+      recognition = setupRecognition();
+      recognition.start();
+      status.textContent = 'Recording & transcribing...';
+    } else {
+      status.textContent = 'Recording... (live transcript not supported in this browser, try Chrome)';
+    }
+
+    btn.textContent = '⏹ Stop Recording';
+    dot.classList.add('active');
+  }catch(err){
+    alert('Could not access microphone: ' + err.message);
+  }
+};
+
+document.getElementById('aiCleanBtn').onclick = async () => {
+  const apiKey = lsGet(LS_APIKEY, null);
+  const transcript = document.getElementById('transcriptText').value.trim();
+  const aiStatus = document.getElementById('aiStatus');
+
+  if(!transcript){
+    alert('No transcript to clean up yet.');
+    return;
+  }
+  if(!apiKey){
+    alert('Add your Anthropic API key in "AI Voice Assistant Settings" above first.');
+    return;
+  }
+
+  aiStatus.textContent = 'Cleaning up...';
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 400,
+        system: 'You clean up voice-to-text transcripts from construction site voice notes. Fix grammar, spelling, punctuation and filler words. Keep every technical detail, measurement, name and instruction exactly as stated - do not invent or omit information. Return only the cleaned-up description text, nothing else.',
+        messages: [{ role: 'user', content: transcript }]
+      })
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error('API error ' + res.status + ': ' + errText.slice(0, 200));
+    }
+    const data = await res.json();
+    const cleaned = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+    if(!cleaned) throw new Error('No response text received.');
+
+    const notesEl = document.getElementById('entryNotes');
+    if(notesEl.value.trim() && !confirm('Replace current notes with the AI-cleaned description? Cancel to append instead.')){
+      notesEl.value = (notesEl.value.trim() + '\n\n' + cleaned).trim();
+    } else {
+      notesEl.value = cleaned;
+    }
+    aiStatus.textContent = 'Description added to notes.';
+  }catch(err){
+    aiStatus.textContent = '';
+    alert('AI clean-up failed: ' + err.message);
+  }
+};
+
+document.getElementById('addEntryBtn').onclick = () => {
+  const type = document.getElementById('entryType').value;
+  const dateTime = document.getElementById('entryDateTime').value || nowLocalDateTimeValue();
+  const notes = document.getElementById('entryNotes').value.trim();
+  const level = document.getElementById('entryLevel').value.trim();
+  const area = document.getElementById('entryArea').value.trim();
+  const taskType = document.getElementById('entryTaskType').value;
+  const progress = document.getElementById('entryProgress').value.trim();
+  const taskStart = document.getElementById('entryTaskStart').value;
+  const taskFinish = document.getElementById('entryTaskFinish').value;
+  const handoverToDelmond = document.getElementById('entryHandoverToDelmond').value;
+  const handoverBackContractor = document.getElementById('entryHandoverBackContractor').value;
+  const transcript = document.getElementById('transcriptText').value.trim();
+
+  if(!notes && currentPhotos.length === 0 && !currentAudio){
+    alert('Add some notes, a photo, or a voice recording before saving.');
+    return;
+  }
+
+  const newEntryId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  entries.push({
+    id: newEntryId,
+    type,
+    dateTime,
+    notes,
+    level,
+    area,
+    areaMarker: currentAreaMarker,
+    taskType,
+    progress,
+    taskStart,
+    taskFinish,
+    handoverToDelmond,
+    handoverBackContractor,
+    transcript,
+    photos: [...currentPhotos],
+    audio: currentAudio
+  });
+  saveEntries();
+
+  document.getElementById('entryNotes').value = '';
+  document.getElementById('entryDateTime').value = '';
+  document.getElementById('entryLevel').value = '';
+  document.getElementById('entryArea').value = '';
+  document.getElementById('entryTaskType').value = '';
+  document.getElementById('taskTypeWrap').style.display = 'none';
+  document.getElementById('areaMarkerWrap').style.display = 'none';
+  clearAreaMarker();
+  loadLevelPlan('');
+  document.getElementById('entryProgress').value = '';
+  document.getElementById('entryTaskStart').value = '';
+  document.getElementById('entryTaskFinish').value = '';
+  document.getElementById('entryHandoverToDelmond').value = '';
+  document.getElementById('entryHandoverBackContractor').value = '';
+  document.getElementById('transcriptText').value = '';
+  document.getElementById('transcriptWrap').style.display = 'none';
+  document.getElementById('aiStatus').textContent = '';
+  currentPhotos = [];
+  currentAudio = null;
+  document.getElementById('audioPreview').style.display = 'none';
+  document.getElementById('audioPreview').src = '';
+  renderPhotoPreview();
+  renderEntries();
+  renderDashboard();
+
+  const newDetail = document.getElementById('detail-' + newEntryId);
+  if(newDetail){
+    newDetail.style.display = 'block';
+    newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
+document.getElementById('filters').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-filter]');
+  if(!btn) return;
+  activeFilter = btn.dataset.filter;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEntries();
+});
+
+document.querySelectorAll('.bottom-nav button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('logView').style.display = tab === 'log' ? 'block' : 'none';
+    document.getElementById('dashboardView').style.display = tab === 'dashboard' ? 'block' : 'none';
+    if(tab === 'dashboard') renderDashboard();
+  };
+});
+
+const TYPE_COLORS = {
+  progress: '#1d4ed8',
+  issue: '#b91c1c',
+  delay: '#b45309',
+  damage: '#a21caf'
+};
+
+function renderDashboard(){
+  const weekEndingInput = document.getElementById('weekEnding');
+  if(!weekEndingInput.value){
+    weekEndingInput.value = nowLocalDateTimeValue().slice(0, 10);
+  }
+  const weekEnding = new Date(weekEndingInput.value + 'T23:59:59');
+  const weekStart = new Date(weekEnding);
+  weekStart.setDate(weekStart.getDate() - 6);
+  weekStart.setHours(0, 0, 0, 0);
+
+  const entriesThisWeek = entries.filter(e => {
+    const d = new Date(e.dateTime);
+    return !isNaN(d) && d >= weekStart && d <= weekEnding;
+  });
+
+  const progressValues = entries.map(e => parseFloat(e.progress)).filter(v => !isNaN(v));
+  const avgProgress = progressValues.length
+    ? Math.round(progressValues.reduce((a, b) => a + b, 0) / progressValues.length)
+    : 0;
+
+  const stats = [
+    { label: 'Total Entries', value: entries.length },
+    { label: 'Entries This Week', value: entriesThisWeek.length },
+    { label: 'Avg Progress', value: avgProgress + '%' },
+    { label: 'Issues Logged', value: entries.filter(e => e.type === 'issue').length },
+    { label: 'Delays Logged', value: entries.filter(e => e.type === 'delay').length },
+    { label: 'Handovers Logged', value: entries.filter(e => e.handoverToDelmond || e.handoverBackContractor).length }
+  ];
+  document.getElementById('statGrid').innerHTML = stats.map(s => `
+    <div class="stat-tile">
+      <div class="label">${s.label}</div>
+      <div class="value">${s.value}</div>
+    </div>
+  `).join('');
+
+  const levelMap = {};
+  entries.forEach(e => {
+    const p = parseFloat(e.progress);
+    if(isNaN(p)) return;
+    const lvl = e.level ? e.level.trim() : 'Unspecified';
+    if(!levelMap[lvl]) levelMap[lvl] = [];
+    levelMap[lvl].push(p);
+  });
+  const levelKeys = Object.keys(levelMap).sort();
+  const progressByLevelEl = document.getElementById('progressByLevel');
+  if(levelKeys.length === 0){
+    progressByLevelEl.innerHTML = '<div class="empty">No progress % logged yet.</div>';
+  } else {
+    progressByLevelEl.innerHTML = levelKeys.map(lvl => {
+      const vals = levelMap[lvl];
+      const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      return `
+        <div class="bar-row">
+          <div>${escapeHtml(lvl)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${avg}%;"></div></div>
+          <div>${avg}%</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const typeCounts = { progress: 0, issue: 0, delay: 0, damage: 0 };
+  entries.forEach(e => { if(typeCounts[e.type] !== undefined) typeCounts[e.type]++; });
+  const total = entries.length;
+  const pieEl = document.getElementById('typePie');
+  const legendEl = document.getElementById('typeLegend');
+  if(total === 0){
+    pieEl.style.background = '#e5e7eb';
+    legendEl.innerHTML = '<div class="empty">No entries yet.</div>';
+  } else {
+    let acc = 0;
+    const stops = [];
+    Object.keys(typeCounts).forEach(t => {
+      const count = typeCounts[t];
+      if(count === 0) return;
+      const start = (acc / total) * 360;
+      acc += count;
+      const end = (acc / total) * 360;
+      stops.push(`${TYPE_COLORS[t]} ${start}deg ${end}deg`);
+    });
+    pieEl.style.background = `conic-gradient(${stops.join(', ')})`;
+    legendEl.innerHTML = Object.keys(typeCounts).filter(t => typeCounts[t] > 0).map(t => `
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:${TYPE_COLORS[t]};"></span>
+        ${typeLabel(t)} (${typeCounts[t]})
+      </div>
+    `).join('');
+  }
+
+  const groups = {};
+  entries.forEach(e => {
+    const key = (e.level || 'Unspecified') + '|' + (e.taskType || 'Unspecified');
+    if(!groups[key] || new Date(e.dateTime) > new Date(groups[key].dateTime)){
+      groups[key] = e;
+    }
+  });
+  const rows = Object.values(groups).sort((a, b) => {
+    const cmp = (a.level || '').localeCompare(b.level || '');
+    return cmp !== 0 ? cmp : (a.taskType || '').localeCompare(b.taskType || '');
+  });
+  const tableEl = document.getElementById('plannerTable');
+  if(rows.length === 0){
+    tableEl.innerHTML = '<tr><td class="empty">No log entries yet.</td></tr>';
+  } else {
+    tableEl.innerHTML = `
+      <tr>
+        <th>Level</th><th>Task Type</th><th>Status</th><th>Progress</th><th>Last Update</th><th>Notes</th>
+      </tr>
+      ${rows.map(e => {
+        const dt = new Date(e.dateTime);
+        const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleDateString();
+        const notesPreview = e.notes ? escapeHtml(e.notes.length > 80 ? e.notes.slice(0, 80) + '…' : e.notes) : '—';
+        return `
+          <tr>
+            <td>${escapeHtml(e.level || '—')}</td>
+            <td>${escapeHtml(e.taskType || '—')}</td>
+            <td><span class="type-tag type-${e.type}">${typeLabel(e.type)}</span></td>
+            <td>${e.progress !== undefined && e.progress !== '' ? escapeHtml(String(e.progress)) + '%' : '—'}</td>
+            <td>${dtStr}</td>
+            <td>${notesPreview}</td>
+          </tr>
+        `;
+      }).join('')}
+    `;
+  }
+}
+
+document.getElementById('weekEnding').addEventListener('change', renderDashboard);
+
+document.getElementById('entryDateTime').value = nowLocalDateTimeValue();
+renderProject();
+renderEntries();
+renderDashboard();
+</script>
+
+</body>
+</html>
