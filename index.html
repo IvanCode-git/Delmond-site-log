@@ -434,7 +434,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -448,7 +447,36 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-const storage = firebase.storage();
+
+const LS_MEDIA_PREFIX = 'siteLog.media.';
+
+function saveLocalMedia(entryId, photos, audio){
+  try{
+    lsSet(LS_MEDIA_PREFIX + entryId, JSON.stringify({ photos, audio }));
+  }catch(e){
+    console.warn('Could not save photos/audio locally (may be too large for this browser)', e);
+  }
+}
+
+function getLocalMedia(entryId){
+  const raw = lsGet(LS_MEDIA_PREFIX + entryId, null);
+  if(!raw) return { photos: [], audio: null };
+  try{
+    const parsed = JSON.parse(raw);
+    return { photos: parsed.photos || [], audio: parsed.audio || null };
+  }catch(e){
+    return { photos: [], audio: null };
+  }
+}
+
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 function lsGet(key, fallback){
   try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
@@ -730,10 +758,17 @@ function renderEntries(){
     const title = titleBits.length ? titleBits.join(' · ') : typeLabel(e.type);
     const subtitle = e.notes ? e.notes : (e.area || 'No notes');
 
-    const photos = e.photos || [];
+    const localMedia = getLocalMedia(e.id);
+    const photos = localMedia.photos;
     const heroPhoto = photos[0] ? `<img class="entry-hero-photo" src="${photos[0]}" onclick="window.open(this.src)">` : '';
     const restPhotos = photos.slice(1).map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('');
-    const audioHtml = e.audio ? `<audio controls src="${e.audio}"></audio>` : '';
+    const audioHtml = localMedia.audio ? `<audio controls src="${localMedia.audio}"></audio>` : '';
+    const notSyncedBits = [];
+    if(e.hasPhotos && photos.length === 0) notSyncedBits.push('📷 photo(s)');
+    if(e.hasAudio && !localMedia.audio) notSyncedBits.push('🎙️ voice recording');
+    const notSyncedHtml = notSyncedBits.length
+      ? `<div class="entry-tags">${notSyncedBits.join(' and ')} captured on the original device — not synced to this one.</div>`
+      : '';
 
     const locationBits = [];
     if(e.level) locationBits.push('Level: ' + escapeHtml(e.level));
@@ -785,6 +820,7 @@ function renderEntries(){
           <div class="entry-body">${e.notes ? escapeHtml(e.notes) : '<em>No notes</em>'}</div>
           ${restPhotos ? `<div class="entry-photos">${restPhotos}</div>` : ''}
           ${audioHtml}
+          ${notSyncedHtml}
           <div class="entry-actions">
             <button type="button" class="secondary small" onclick="downloadEntryPdf('${e.id}')">📄 PDF</button>
             <button type="button" class="secondary small" onclick="toggleEmailPanel('${e.id}')">✉️ Email</button>
@@ -848,7 +884,8 @@ function buildEntrySummaryText(e){
     e.handoverToDelmond ? 'Handover to Delmond: ' + e.handoverToDelmond : '',
     e.handoverBackContractor ? 'Handover back to main contractor: ' + e.handoverBackContractor : '',
     e.notes ? 'Notes: ' + e.notes : '',
-    (e.photos && e.photos.length) ? 'Photos attached in app: ' + e.photos.length : ''
+    e.hasPhotos ? 'Photos attached in app (on the capturing device)' : '',
+    e.hasAudio ? 'Voice recording attached in app (on the capturing device)' : ''
   ].filter(Boolean);
   return lines.join('\n');
 }
@@ -940,9 +977,10 @@ function buildEntryReportHtml(e){
   addRow('Handover to Delmond', e.handoverToDelmond);
   addRow('Handover back to Main Contractor', e.handoverBackContractor);
 
-  const photosHtml = (e.photos && e.photos.length)
-    ? `<div class="pr-photos">${e.photos.map(p => `<img src="${p}">`).join('')}</div>`
-    : '';
+  const localMedia = getLocalMedia(e.id);
+  const photosHtml = localMedia.photos.length
+    ? `<div class="pr-photos">${localMedia.photos.map(p => `<img src="${p}">`).join('')}</div>`
+    : (e.hasPhotos ? '<p style="font-size:12px; color:#666;">📷 Photos were captured on a different device and are not available on this one.</p>' : '');
 
   const planImgUrl = LEVEL_PLANS[e.level];
   const planHtml = (e.areaMarker && planImgUrl) ? `
@@ -955,8 +993,8 @@ function buildEntryReportHtml(e){
     </div>
   ` : '';
 
-  const audioNote = e.audio
-    ? '<p style="font-size:12px; color:#666;">🎙️ A voice recording is attached to this entry in the app (not included in this PDF).</p>'
+  const audioNote = (localMedia.audio || e.hasAudio)
+    ? '<p style="font-size:12px; color:#666;">🎙️ A voice recording is attached to this entry in the app on the capturing device (not included in this PDF).</p>'
     : '';
 
   return `
@@ -983,6 +1021,7 @@ async function deleteEntry(id){
   if(!confirm('Delete this entry?')) return;
   try{
     await db.collection('entries').doc(id).delete();
+    lsRemove(LS_MEDIA_PREFIX + id);
   }catch(err){
     alert('Failed to delete entry: ' + err.message);
   }
@@ -1170,18 +1209,13 @@ document.getElementById('addEntryBtn').onclick = async () => {
   try{
     const entryRef = db.collection('entries').doc();
 
-    const photoUrls = [];
-    for(let i = 0; i < currentPhotos.length; i++){
-      const fileRef = storage.ref(`entries/${entryRef.id}/photo_${i}`);
-      await fileRef.put(currentPhotos[i].file);
-      photoUrls.push(await fileRef.getDownloadURL());
-    }
-
-    let audioUrl = null;
+    const photoDataUrls = currentPhotos.map(p => p.preview);
+    let audioDataUrl = null;
     if(currentAudioBlob){
-      const audioRef = storage.ref(`entries/${entryRef.id}/audio.webm`);
-      await audioRef.put(currentAudioBlob);
-      audioUrl = await audioRef.getDownloadURL();
+      audioDataUrl = await blobToDataUrl(currentAudioBlob);
+    }
+    if(photoDataUrls.length || audioDataUrl){
+      saveLocalMedia(entryRef.id, photoDataUrls, audioDataUrl);
     }
 
     await entryRef.set({
@@ -1198,8 +1232,8 @@ document.getElementById('addEntryBtn').onclick = async () => {
       handoverToDelmond,
       handoverBackContractor,
       transcript,
-      photos: photoUrls,
-      audio: audioUrl,
+      hasPhotos: photoDataUrls.length > 0,
+      hasAudio: !!audioDataUrl,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
