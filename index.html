@@ -829,9 +829,9 @@ function renderEntries(){
               <label>Body</label>
               <textarea id="emailBody-${e.id}" style="min-height:120px;"></textarea>
             </div>
-            <button type="button" onclick="openMailto('${e.id}')">📤 Open in Mail App</button>
+            <button type="button" onclick="shareEntryWithPdf('${e.id}')">📤 Share with PDF Attached</button>
             <p style="font-size:11px; color:var(--muted); margin-top:6px;">
-              Opens your device's email app with this drafted message ready to review and send. Email links can't attach files — attach the PDF (📄 above) or photos yourself before sending.
+              Opens your device's share sheet with the PDF report already attached — pick Mail (or Messages, WhatsApp, AirDrop, etc.) and it sends with the attachment. On browsers that don't support this, the PDF will download instead and you'll need to attach it manually.
             </p>
           </div>
         </div>
@@ -904,23 +904,6 @@ async function draftEmail(id){
 }
 window.draftEmail = draftEmail;
 
-function openMailto(id){
-  const to = document.getElementById('emailTo-' + id).value.trim();
-  const subject = document.getElementById('emailSubject-' + id).value;
-  const body = document.getElementById('emailBody-' + id).value;
-
-  if(!to){
-    alert('Enter a recipient email address first.');
-    return;
-  }
-
-  const mailto = 'mailto:' + encodeURIComponent(to) +
-    '?subject=' + encodeURIComponent(subject) +
-    '&body=' + encodeURIComponent(body);
-  window.location.href = mailto;
-}
-window.openMailto = openMailto;
-
 function loadImageAsJpeg(src){
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -972,16 +955,12 @@ function loadPlanWithMarkerAsJpeg(src, marker){
   });
 }
 
-async function downloadEntryPdf(id){
+async function buildEntryPdfDoc(id){
   const e = entries.find(x => x.id === id);
-  if(!e) return;
-  const btn = document.querySelector(`[onclick="downloadEntryPdf('${id}')"]`);
-  const originalText = btn ? btn.textContent : null;
-  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+  if(!e) throw new Error('Entry not found');
 
-  try{
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const marginX = 14;
     const maxWidth = pageWidth - marginX * 2;
@@ -1076,6 +1055,16 @@ async function downloadEntryPdf(id){
       doc.text('A voice recording is attached to this entry in the app on the capturing device (not included here).', marginX, y);
     }
 
+  return doc;
+}
+
+async function downloadEntryPdf(id){
+  const btn = document.querySelector(`[onclick="downloadEntryPdf('${id}')"]`);
+  const originalText = btn ? btn.textContent : null;
+  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+
+  try{
+    const doc = await buildEntryPdfDoc(id);
     doc.save(`delmond-entry-${id}.pdf`);
   }catch(err){
     alert('Could not build the PDF: ' + err.message);
@@ -1084,6 +1073,55 @@ async function downloadEntryPdf(id){
   }
 }
 window.downloadEntryPdf = downloadEntryPdf;
+
+async function shareEntryWithPdf(id){
+  const to = document.getElementById('emailTo-' + id).value.trim();
+  const subject = document.getElementById('emailSubject-' + id).value;
+  const body = document.getElementById('emailBody-' + id).value;
+  const btn = document.querySelector(`[onclick="shareEntryWithPdf('${id}')"]`);
+  const originalText = btn ? btn.textContent : null;
+  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+
+  try{
+    const doc = await buildEntryPdfDoc(id);
+    const blob = doc.output('blob');
+    const file = new File([blob], `delmond-entry-${id}.pdf`, { type: 'application/pdf' });
+
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({
+        files: [file],
+        title: subject || 'Delmond Site Log Entry',
+        text: body || ''
+      });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      if(!to){
+        alert('The PDF downloaded. Enter a recipient email address to also open your mail app.');
+      } else {
+        const mailto = 'mailto:' + encodeURIComponent(to) +
+          '?subject=' + encodeURIComponent(subject) +
+          '&body=' + encodeURIComponent(body);
+        window.location.href = mailto;
+        alert('This browser can\'t attach files to an email automatically — the PDF just downloaded, so attach it manually in your mail app before sending.');
+      }
+    }
+  }catch(err){
+    if(err.name !== 'AbortError'){
+      alert('Could not share the PDF: ' + err.message);
+    }
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = originalText; }
+  }
+}
+window.shareEntryWithPdf = shareEntryWithPdf;
 
 async function deleteEntry(id){
   if(!confirm('Delete this entry?')) return;
