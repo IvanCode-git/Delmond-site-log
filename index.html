@@ -422,7 +422,7 @@
 
 </div>
 
-<footer>Data is stored locally in this browser only (localStorage).</footer>
+<footer>Log entries sync live across every device. Your PIN and AI key stay local to this browser only.</footer>
 
 <nav class="bottom-nav">
   <button data-tab="log" class="active"><span class="nav-icon">📋</span>Log</button>
@@ -431,7 +431,25 @@
 
 <div id="printReport"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA4AOv6dBXYzDnQaBKgQ6isig3PzwPywRc",
+  authDomain: "delmond-site-log.firebaseapp.com",
+  projectId: "delmond-site-log",
+  storageBucket: "delmond-site-log.firebasestorage.app",
+  messagingSenderId: "261675452119",
+  appId: "1:261675452119:web:244fa7042f0dbb1fd1d292"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
 function lsGet(key, fallback){
   try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
   catch(e){ console.warn('localStorage unavailable', e); return fallback; }
@@ -599,23 +617,45 @@ document.getElementById('planBox').addEventListener('click', (ev) => {
 
 document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
 
-const LS_PROJECT = 'siteLog.project';
-const LS_ENTRIES = 'siteLog.entries';
-
-let project = JSON.parse(lsGet(LS_PROJECT, '{}'));
-let entries = JSON.parse(lsGet(LS_ENTRIES, '[]'));
+let project = {};
+let entries = [];
 let currentPhotos = [];
-let currentAudio = null;
+let currentAudioBlob = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let activeFilter = 'all';
+let firestoreSyncStarted = false;
 
-function saveProject(){
-  lsSet(LS_PROJECT, JSON.stringify(project));
+function startFirestoreSync(){
+  if(firestoreSyncStarted) return;
+  firestoreSyncStarted = true;
+
+  document.getElementById('entriesList').innerHTML = '<div class="empty">Loading shared log…</div>';
+
+  db.collection('meta').doc('project').onSnapshot((doc) => {
+    project = doc.exists ? doc.data() : {};
+    renderProject();
+  }, (err) => {
+    console.error('Project sync error', err);
+  });
+
+  db.collection('entries').onSnapshot((snapshot) => {
+    entries = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderEntries();
+    renderDashboard();
+  }, (err) => {
+    console.error('Entries sync error', err);
+    document.getElementById('entriesList').innerHTML = '<div class="empty">Could not connect to the shared log. Check your connection and reload.</div>';
+  });
 }
-function saveEntries(){
-  lsSet(LS_ENTRIES, JSON.stringify(entries));
-}
+
+auth.onAuthStateChanged((user) => {
+  if(user) startFirestoreSync();
+});
+auth.signInAnonymously().catch((err) => {
+  console.error('Anonymous sign-in failed', err);
+  alert('Could not connect to the shared site log: ' + err.message);
+});
 
 function fileToDataUrl(file){
   return new Promise((resolve, reject) => {
@@ -645,10 +685,10 @@ function renderProject(){
 function renderPhotoPreview(){
   const grid = document.getElementById('photoPreview');
   grid.innerHTML = '';
-  currentPhotos.forEach((src, i) => {
+  currentPhotos.forEach((p, i) => {
     const div = document.createElement('div');
     div.className = 'thumb';
-    div.innerHTML = `<img src="${src}"><button class="remove" data-i="${i}">×</button>`;
+    div.innerHTML = `<img src="${p.preview}"><button class="remove" data-i="${i}">×</button>`;
     grid.appendChild(div);
   });
   grid.querySelectorAll('.remove').forEach(btn => {
@@ -939,31 +979,35 @@ function downloadEntryPdf(id){
 }
 window.downloadEntryPdf = downloadEntryPdf;
 
-function deleteEntry(id){
+async function deleteEntry(id){
   if(!confirm('Delete this entry?')) return;
-  entries = entries.filter(e => e.id !== id);
-  saveEntries();
-  renderEntries();
-  renderDashboard();
+  try{
+    await db.collection('entries').doc(id).delete();
+  }catch(err){
+    alert('Failed to delete entry: ' + err.message);
+  }
 }
 window.deleteEntry = deleteEntry;
 
-document.getElementById('saveProjectBtn').onclick = () => {
-  project = {
+document.getElementById('saveProjectBtn').onclick = async () => {
+  const newProject = {
     name: document.getElementById('projectName').value,
     startDate: document.getElementById('startDate').value,
     finishDate: document.getElementById('finishDate').value,
     progress: document.getElementById('progressPercent').value
   };
-  saveProject();
-  renderProject();
+  try{
+    await db.collection('meta').doc('project').set(newProject);
+  }catch(err){
+    alert('Failed to save project details: ' + err.message);
+  }
 };
 
 document.getElementById('photoInput').onchange = async (ev) => {
   const files = Array.from(ev.target.files);
   for(const f of files){
     const dataUrl = await fileToDataUrl(f);
-    currentPhotos.push(dataUrl);
+    currentPhotos.push({ file: f, preview: dataUrl });
   }
   ev.target.value = '';
   renderPhotoPreview();
@@ -1022,15 +1066,10 @@ document.getElementById('recordBtn').onclick = async () => {
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-      const reader = new FileReader();
-      reader.onload = () => {
-        currentAudio = reader.result;
-        const audioEl = document.getElementById('audioPreview');
-        audioEl.src = currentAudio;
-        audioEl.style.display = 'block';
-      };
-      reader.readAsDataURL(blob);
+      currentAudioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const audioEl = document.getElementById('audioPreview');
+      audioEl.src = URL.createObjectURL(currentAudioBlob);
+      audioEl.style.display = 'block';
       stream.getTracks().forEach(t => t.stop());
       btn.textContent = '🎙️ Start Recording';
       dot.classList.remove('active');
@@ -1105,7 +1144,7 @@ document.getElementById('aiCleanBtn').onclick = async () => {
   }
 };
 
-document.getElementById('addEntryBtn').onclick = () => {
+document.getElementById('addEntryBtn').onclick = async () => {
   const type = document.getElementById('entryType').value;
   const dateTime = document.getElementById('entryDateTime').value || nowLocalDateTimeValue();
   const notes = document.getElementById('entryNotes').value.trim();
@@ -1119,61 +1158,86 @@ document.getElementById('addEntryBtn').onclick = () => {
   const handoverBackContractor = document.getElementById('entryHandoverBackContractor').value;
   const transcript = document.getElementById('transcriptText').value.trim();
 
-  if(!notes && currentPhotos.length === 0 && !currentAudio){
+  if(!notes && currentPhotos.length === 0 && !currentAudioBlob){
     alert('Add some notes, a photo, or a voice recording before saving.');
     return;
   }
 
-  const newEntryId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-  entries.push({
-    id: newEntryId,
-    type,
-    dateTime,
-    notes,
-    level,
-    area,
-    areaMarker: currentAreaMarker,
-    taskType,
-    progress,
-    taskStart,
-    taskFinish,
-    handoverToDelmond,
-    handoverBackContractor,
-    transcript,
-    photos: [...currentPhotos],
-    audio: currentAudio
-  });
-  saveEntries();
+  const addBtn = document.getElementById('addEntryBtn');
+  addBtn.disabled = true;
+  addBtn.textContent = 'Saving...';
 
-  document.getElementById('entryNotes').value = '';
-  document.getElementById('entryDateTime').value = '';
-  document.getElementById('entryLevel').value = '';
-  document.getElementById('entryArea').value = '';
-  document.getElementById('entryTaskType').value = '';
-  document.getElementById('taskTypeWrap').style.display = 'none';
-  document.getElementById('areaMarkerWrap').style.display = 'none';
-  clearAreaMarker();
-  loadLevelPlan('');
-  document.getElementById('entryProgress').value = '';
-  document.getElementById('entryTaskStart').value = '';
-  document.getElementById('entryTaskFinish').value = '';
-  document.getElementById('entryHandoverToDelmond').value = '';
-  document.getElementById('entryHandoverBackContractor').value = '';
-  document.getElementById('transcriptText').value = '';
-  document.getElementById('transcriptWrap').style.display = 'none';
-  document.getElementById('aiStatus').textContent = '';
-  currentPhotos = [];
-  currentAudio = null;
-  document.getElementById('audioPreview').style.display = 'none';
-  document.getElementById('audioPreview').src = '';
-  renderPhotoPreview();
-  renderEntries();
-  renderDashboard();
+  try{
+    const entryRef = db.collection('entries').doc();
 
-  const newDetail = document.getElementById('detail-' + newEntryId);
-  if(newDetail){
-    newDetail.style.display = 'block';
-    newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const photoUrls = [];
+    for(let i = 0; i < currentPhotos.length; i++){
+      const fileRef = storage.ref(`entries/${entryRef.id}/photo_${i}`);
+      await fileRef.put(currentPhotos[i].file);
+      photoUrls.push(await fileRef.getDownloadURL());
+    }
+
+    let audioUrl = null;
+    if(currentAudioBlob){
+      const audioRef = storage.ref(`entries/${entryRef.id}/audio.webm`);
+      await audioRef.put(currentAudioBlob);
+      audioUrl = await audioRef.getDownloadURL();
+    }
+
+    await entryRef.set({
+      type,
+      dateTime,
+      notes,
+      level,
+      area,
+      areaMarker: currentAreaMarker,
+      taskType,
+      progress,
+      taskStart,
+      taskFinish,
+      handoverToDelmond,
+      handoverBackContractor,
+      transcript,
+      photos: photoUrls,
+      audio: audioUrl,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    document.getElementById('entryNotes').value = '';
+    document.getElementById('entryDateTime').value = '';
+    document.getElementById('entryLevel').value = '';
+    document.getElementById('entryArea').value = '';
+    document.getElementById('entryTaskType').value = '';
+    document.getElementById('taskTypeWrap').style.display = 'none';
+    document.getElementById('areaMarkerWrap').style.display = 'none';
+    clearAreaMarker();
+    loadLevelPlan('');
+    document.getElementById('entryProgress').value = '';
+    document.getElementById('entryTaskStart').value = '';
+    document.getElementById('entryTaskFinish').value = '';
+    document.getElementById('entryHandoverToDelmond').value = '';
+    document.getElementById('entryHandoverBackContractor').value = '';
+    document.getElementById('transcriptText').value = '';
+    document.getElementById('transcriptWrap').style.display = 'none';
+    document.getElementById('aiStatus').textContent = '';
+    currentPhotos = [];
+    currentAudioBlob = null;
+    document.getElementById('audioPreview').style.display = 'none';
+    document.getElementById('audioPreview').src = '';
+    renderPhotoPreview();
+
+    setTimeout(() => {
+      const newDetail = document.getElementById('detail-' + entryRef.id);
+      if(newDetail){
+        newDetail.style.display = 'block';
+        newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  }catch(err){
+    alert('Failed to save entry: ' + err.message);
+  }finally{
+    addBtn.disabled = false;
+    addBtn.textContent = 'Add Entry';
   }
 };
 
@@ -1334,9 +1398,6 @@ function renderDashboard(){
 document.getElementById('weekEnding').addEventListener('change', renderDashboard);
 
 document.getElementById('entryDateTime').value = nowLocalDateTimeValue();
-renderProject();
-renderEntries();
-renderDashboard();
 </script>
 
 </body>
