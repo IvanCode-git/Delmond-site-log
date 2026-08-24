@@ -179,23 +179,6 @@
 
   .entry-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
   .email-panel{margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
-
-  #printReport{display:none;}
-  @media print{
-    body > *:not(#printReport){display:none !important;}
-    #printReport{
-      display:block !important; padding:24px; font-family:-apple-system,Arial,sans-serif; color:#000;
-    }
-    #printReport h1{font-size:20px; margin:0 0 2px;}
-    #printReport .pr-meta{font-size:12px; color:#444; margin-bottom:16px;}
-    #printReport table{width:100%; border-collapse:collapse; margin-bottom:16px;}
-    #printReport td{padding:4px 8px 4px 0; vertical-align:top; font-size:13px;}
-    #printReport td.pr-label{font-weight:700; width:180px; color:#333;}
-    #printReport .pr-photos{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
-    #printReport .pr-photos img{width:180px; height:135px; object-fit:cover; border:1px solid #ccc;}
-    #printReport .pr-plan{margin-top:12px;}
-    #printReport .pr-plan img{max-width:420px; display:block; border:1px solid #ccc;}
-  }
 </style>
 </head>
 <body>
@@ -222,18 +205,6 @@
 <div class="container">
 
   <div id="logView">
-
-    <div class="card">
-      <h2>AI Voice Assistant Settings</h2>
-      <div class="field">
-        <label>Anthropic API Key (stored only in this browser)</label>
-        <input type="text" id="apiKeyInput" placeholder="sk-ant-...">
-      </div>
-      <button id="saveApiKeyBtn" class="secondary small">Save Key</button>
-      <p style="font-size:12px; color:var(--muted); margin-top:8px;">
-        Used only to tidy up voice-note transcripts into clean descriptions. Get a key from your own Anthropic account. It's stored in this browser's localStorage — fine for solo use, but don't share this file with the key already in it.
-      </p>
-    </div>
 
     <div class="card">
       <h2>Project Details</h2>
@@ -429,11 +400,10 @@
   <button data-tab="dashboard"><span class="nav-icon">📊</span>Dashboard</button>
 </nav>
 
-<div id="printReport"></div>
-
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -909,37 +879,15 @@ function buildEntrySummaryText(e){
 async function draftEmail(id){
   const e = entries.find(x => x.id === id);
   if(!e) return;
-  const apiKey = lsGet(LS_APIKEY, null);
   const statusEl = document.getElementById('emailStatus-' + id);
-
-  if(!apiKey){
-    alert('Add your Anthropic API key in "AI Voice Assistant Settings" above first.');
-    return;
-  }
 
   statusEl.textContent = 'Drafting...';
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 500,
-        system: 'You draft short, professional emails summarizing a single construction site log entry for ' + (project.name || 'a construction site') + '. Given the log entry details, write a clear subject line and a concise professional email body suitable for sending to a contractor, consultant or client. Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape: {"subject":"...","body":"..."}',
-        messages: [{ role: 'user', content: buildEntrySummaryText(e) }]
-      })
-    });
-    if(!res.ok){
-      const errText = await res.text();
-      throw new Error('API error ' + res.status + ': ' + errText.slice(0, 200));
-    }
-    const data = await res.json();
-    const raw = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+    const raw = await callAiProxy(
+      'You draft short, professional emails summarizing a single construction site log entry for ' + (project.name || 'a construction site') + '. Given the log entry details, write a clear subject line and a concise professional email body suitable for sending to a contractor, consultant or client. Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape: {"subject":"...","body":"..."}',
+      buildEntrySummaryText(e),
+      500
+    );
     let parsed;
     try{
       parsed = JSON.parse(raw);
@@ -973,63 +921,167 @@ function openMailto(id){
 }
 window.openMailto = openMailto;
 
-function buildEntryReportHtml(e){
-  const dt = new Date(e.dateTime);
-  const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
-  const rows = [];
-  const addRow = (label, value) => {
-    if(value === '' || value === undefined || value === null) return;
-    rows.push(`<tr><td class="pr-label">${escapeHtml(label)}</td><td>${escapeHtml(String(value))}</td></tr>`);
-  };
-
-  addRow('Entry type', typeLabel(e.type));
-  addRow('Date & time', dtStr);
-  addRow('Level', e.level);
-  addRow('Area note', e.area);
-  addRow('Task type', e.taskType);
-  addRow('Progress', (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '');
-  addRow('Task start date', e.taskStart);
-  addRow('Task finish date', e.taskFinish);
-  addRow('Handover to Delmond', e.handoverToDelmond);
-  addRow('Handover back to Main Contractor', e.handoverBackContractor);
-
-  const localMedia = getLocalMedia(e.id);
-  const photosHtml = localMedia.photos.length
-    ? `<div class="pr-photos">${localMedia.photos.map(p => `<img src="${p}">`).join('')}</div>`
-    : (e.hasPhotos ? '<p style="font-size:12px; color:#666;">📷 Photos were captured on a different device and are not available on this one.</p>' : '');
-
-  const planImgUrl = LEVEL_PLANS[e.level];
-  const planHtml = (e.areaMarker && planImgUrl) ? `
-    <div class="pr-plan">
-      <div><strong>Area pin</strong></div>
-      <div style="position:relative; display:inline-block;">
-        <img src="${planImgUrl}">
-        <div style="position:absolute; left:${e.areaMarker.x}%; top:${e.areaMarker.y}%; width:12px; height:12px; margin-left:-6px; margin-top:-6px; border-radius:50%; background:#b3261e; border:2px solid #fff;"></div>
-      </div>
-    </div>
-  ` : '';
-
-  const audioNote = (localMedia.audio || e.hasAudio)
-    ? '<p style="font-size:12px; color:#666;">🎙️ A voice recording is attached to this entry in the app on the capturing device (not included in this PDF).</p>'
-    : '';
-
-  return `
-    <h1>${escapeHtml(project.name || 'Site Log')}</h1>
-    <div class="pr-meta">Delmond Site Log — Entry Report</div>
-    <table>${rows.join('')}</table>
-    <div><strong>Notes</strong></div>
-    <p style="white-space:pre-wrap; font-size:13px;">${e.notes ? escapeHtml(e.notes) : 'No notes.'}</p>
-    ${planHtml}
-    ${photosHtml}
-    ${audioNote}
-  `;
+function loadImageAsJpeg(src){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      resolve({
+        dataUrl: canvas.toDataURL('image/jpeg', 0.85),
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
-function downloadEntryPdf(id){
+function loadPlanWithMarkerAsJpeg(src, marker){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const cx = (marker.x / 100) * canvas.width;
+      const cy = (marker.y / 100) * canvas.height;
+      const r = Math.max(8, canvas.width * 0.012);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#b3261e';
+      ctx.fill();
+      ctx.lineWidth = r * 0.3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      resolve({
+        dataUrl: canvas.toDataURL('image/jpeg', 0.85),
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function downloadEntryPdf(id){
   const e = entries.find(x => x.id === id);
   if(!e) return;
-  document.getElementById('printReport').innerHTML = buildEntryReportHtml(e);
-  window.print();
+  const btn = document.querySelector(`[onclick="downloadEntryPdf('${id}')"]`);
+  const originalText = btn ? btn.textContent : null;
+  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+    const maxWidth = pageWidth - marginX * 2;
+    let y = 18;
+
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text(project.name || 'Site Log', marginX, y);
+    y += 7;
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(100);
+    doc.text('Delmond Site Log — Entry Report', marginX, y);
+    doc.setTextColor(0);
+    y += 10;
+
+    const dt = new Date(e.dateTime);
+    const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
+
+    const addLine = (label, value) => {
+      if(value === '' || value === undefined || value === null) return;
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text(label + ':', marginX, y);
+      doc.setFont(undefined, 'normal');
+      doc.text(String(value), marginX + 55, y);
+      y += 7;
+    };
+
+    addLine('Entry type', typeLabel(e.type));
+    addLine('Date & time', dtStr);
+    addLine('Level', e.level);
+    addLine('Area note', e.area);
+    addLine('Task type', e.taskType);
+    addLine('Progress', (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '');
+    addLine('Task start date', e.taskStart);
+    addLine('Task finish date', e.taskFinish);
+    addLine('Handover to Delmond', e.handoverToDelmond);
+    addLine('Handover back to Main Contractor', e.handoverBackContractor);
+
+    y += 3;
+    doc.setFont(undefined, 'bold');
+    doc.text('Notes', marginX, y);
+    y += 6;
+    doc.setFont(undefined, 'normal');
+    const notesLines = doc.splitTextToSize(e.notes || 'No notes.', maxWidth);
+    doc.text(notesLines, marginX, y);
+    y += notesLines.length * 5.5 + 6;
+
+    const localMedia = getLocalMedia(e.id);
+    const planImgUrl = LEVEL_PLANS[e.level];
+
+    if(e.areaMarker && planImgUrl){
+      try{
+        if(y > 230){ doc.addPage(); y = 18; }
+        const img = await loadPlanWithMarkerAsJpeg(planImgUrl, e.areaMarker);
+        doc.setFont(undefined, 'bold');
+        doc.text('Area pin', marginX, y);
+        y += 5;
+        const w = maxWidth;
+        const h = w * (img.height / img.width);
+        doc.addImage(img.dataUrl, 'JPEG', marginX, y, w, h);
+        y += h + 8;
+      }catch(err){ console.warn('Could not embed plan image', err); }
+    }
+
+    if(localMedia.photos.length){
+      doc.setFont(undefined, 'bold');
+      if(y > 260){ doc.addPage(); y = 18; }
+      doc.text('Photos', marginX, y);
+      y += 6;
+      for(const p of localMedia.photos){
+        try{
+          const img = await loadImageAsJpeg(p);
+          const w = 85;
+          const h = w * (img.height / img.width);
+          if(y + h > 280){ doc.addPage(); y = 18; }
+          doc.addImage(img.dataUrl, 'JPEG', marginX, y, w, h);
+          y += h + 6;
+        }catch(err){ console.warn('Could not embed photo', err); }
+      }
+    } else if(e.hasPhotos){
+      doc.setFont(undefined, 'italic');
+      doc.setFontSize(10);
+      doc.text('Photos were captured on a different device and are not available on this one.', marginX, y);
+      y += 7;
+    }
+
+    if(localMedia.audio || e.hasAudio){
+      doc.setFont(undefined, 'italic');
+      doc.setFontSize(10);
+      doc.text('A voice recording is attached to this entry in the app on the capturing device (not included here).', marginX, y);
+    }
+
+    doc.save(`delmond-entry-${id}.pdf`);
+  }catch(err){
+    alert('Could not build the PDF: ' + err.message);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = originalText; }
+  }
 }
 window.downloadEntryPdf = downloadEntryPdf;
 
@@ -1068,12 +1120,23 @@ document.getElementById('photoInput').onchange = async (ev) => {
   renderPhotoPreview();
 };
 
-const LS_APIKEY = 'siteLog.apiKey';
-document.getElementById('apiKeyInput').value = lsGet(LS_APIKEY, '');
-document.getElementById('saveApiKeyBtn').onclick = () => {
-  lsSet(LS_APIKEY, document.getElementById('apiKeyInput').value.trim());
-  alert('API key saved to this browser.');
-};
+const AI_PROXY_URL = 'AI_PROXY_URL_PLACEHOLDER';
+
+async function callAiProxy(system, message, maxTokens){
+  const res = await fetch(AI_PROXY_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ system, message, max_tokens: maxTokens })
+  });
+  if(!res.ok){
+    const errText = await res.text();
+    throw new Error('AI service error ' + res.status + ': ' + errText.slice(0, 200));
+  }
+  const data = await res.json();
+  const text = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+  if(!text) throw new Error('No response text received.');
+  return text;
+}
 
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
@@ -1148,7 +1211,6 @@ document.getElementById('recordBtn').onclick = async () => {
 };
 
 document.getElementById('aiCleanBtn').onclick = async () => {
-  const apiKey = lsGet(LS_APIKEY, null);
   const transcript = document.getElementById('transcriptText').value.trim();
   const aiStatus = document.getElementById('aiStatus');
 
@@ -1156,35 +1218,14 @@ document.getElementById('aiCleanBtn').onclick = async () => {
     alert('No transcript to clean up yet.');
     return;
   }
-  if(!apiKey){
-    alert('Add your Anthropic API key in "AI Voice Assistant Settings" above first.');
-    return;
-  }
 
   aiStatus.textContent = 'Cleaning up...';
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 400,
-        system: 'You clean up voice-to-text transcripts from construction site voice notes. Fix grammar, spelling, punctuation and filler words. Keep every technical detail, measurement, name and instruction exactly as stated - do not invent or omit information. Return only the cleaned-up description text, nothing else.',
-        messages: [{ role: 'user', content: transcript }]
-      })
-    });
-    if(!res.ok){
-      const errText = await res.text();
-      throw new Error('API error ' + res.status + ': ' + errText.slice(0, 200));
-    }
-    const data = await res.json();
-    const cleaned = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
-    if(!cleaned) throw new Error('No response text received.');
+    const cleaned = await callAiProxy(
+      'You clean up voice-to-text transcripts from construction site voice notes. Fix grammar, spelling, punctuation and filler words. Keep every technical detail, measurement, name and instruction exactly as stated - do not invent or omit information. Return only the cleaned-up description text, nothing else.',
+      transcript,
+      400
+    );
 
     const notesEl = document.getElementById('entryNotes');
     if(notesEl.value.trim() && !confirm('Replace current notes with the AI-cleaned description? Cancel to append instead.')){
