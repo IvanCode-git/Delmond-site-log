@@ -657,24 +657,40 @@ let firestoreSyncStarted = false;
 function startFirestoreSync(){
   if(firestoreSyncStarted) return;
   firestoreSyncStarted = true;
+  attachFirestoreListeners(4);
+}
 
+function attachFirestoreListeners(retriesLeft){
   document.getElementById('entriesList').innerHTML = '<div class="empty">Loading shared log…</div>';
 
-  db.collection('meta').doc('project').onSnapshot((doc) => {
+  let retryScheduled = false;
+  let projectUnsub = null;
+  let entriesUnsub = null;
+
+  const handleSyncError = (err) => {
+    console.warn('Firestore sync error (will retry if attempts remain)', err);
+    if(retryScheduled) return;
+    retryScheduled = true;
+    if(projectUnsub) projectUnsub();
+    if(entriesUnsub) entriesUnsub();
+    if(retriesLeft > 0){
+      setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
+    } else {
+      console.error('Firestore sync failed after retries', err);
+      document.getElementById('entriesList').innerHTML = '<div class="empty">Could not connect to the shared log. Check your connection and reload.</div>';
+    }
+  };
+
+  projectUnsub = db.collection('meta').doc('project').onSnapshot((doc) => {
     project = doc.exists ? doc.data() : {};
     renderProject();
-  }, (err) => {
-    console.error('Project sync error', err);
-  });
+  }, handleSyncError);
 
-  db.collection('entries').onSnapshot((snapshot) => {
+  entriesUnsub = db.collection('entries').onSnapshot((snapshot) => {
     entries = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderEntries();
     renderDashboard();
-  }, (err) => {
-    console.error('Entries sync error', err);
-    document.getElementById('entriesList').innerHTML = '<div class="empty">Could not connect to the shared log. Check your connection and reload.</div>';
-  });
+  }, handleSyncError);
 }
 
 auth.onAuthStateChanged((user) => {
