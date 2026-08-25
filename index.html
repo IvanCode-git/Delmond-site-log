@@ -70,6 +70,8 @@
   .entry-row{display:flex; align-items:flex-start; gap:10px; padding:12px 2px; cursor:pointer;}
   .entry-row:hover{background:#f7f8fa;}
   .status-dot{width:10px; height:10px; border-radius:50%; margin-top:5px; flex-shrink:0;}
+  .entry-select{margin-top:4px; flex-shrink:0; width:16px; height:16px;}
+  .bulk-pdf-bar{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; font-size:12px; color:var(--muted);}
   .entry-row-main{flex:1; min-width:0;}
   .entry-row-title{font-size:14px; font-weight:700; color:var(--text);}
   .entry-row-sub{font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -236,6 +238,9 @@
 
     <div class="card">
       <h2>New Log Entry</h2>
+      <p id="editingNotice" style="display:none; font-size:12px; color:var(--accent); font-weight:700; margin:-2px 0 8px;">
+        ✏️ Editing an existing entry — saving will update it, not create a new one.
+      </p>
       <div class="row">
         <div class="field">
           <label>Entry Type</label>
@@ -327,6 +332,7 @@
           <button type="button" id="recordBtn" class="secondary small">🎙️ Start Recording</button>
           <span class="rec-dot" id="recDot"></span>
           <span id="recStatus" style="font-size:12px; color:var(--muted);"></span>
+          <button type="button" id="removeAudioBtn" class="danger small" style="display:none;">Remove Recording</button>
         </div>
         <audio id="audioPreview" controls style="display:none;"></audio>
         <div id="transcriptWrap" style="display:none; margin-top:8px;">
@@ -339,7 +345,10 @@
         </div>
       </div>
 
-      <button id="addEntryBtn">Add Entry</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="addEntryBtn">Add Entry</button>
+        <button type="button" id="cancelEditBtn" class="secondary" style="display:none;">Cancel Edit</button>
+      </div>
     </div>
 
     <div class="card">
@@ -350,6 +359,10 @@
         <button data-filter="issue">Issues</button>
         <button data-filter="delay">Delays</button>
         <button data-filter="damage">Damages</button>
+      </div>
+      <div class="bulk-pdf-bar">
+        <span id="bulkSelectedCount">Tick entries below to combine into one PDF</span>
+        <button type="button" id="downloadSelectedPdfBtn" class="secondary small" disabled>📄 Download Selected as PDF</button>
       </div>
       <div id="entriesList"></div>
     </div>
@@ -623,6 +636,9 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let activeFilter = 'all';
 let firestoreSyncStarted = false;
+let selectedEntryIds = new Set();
+let editingEntryId = null;
+let existingAudioDataUrl = null;
 
 function startFirestoreSync(){
   if(firestoreSyncStarted) return;
@@ -789,6 +805,7 @@ function renderEntries(){
     return `
       <div class="entry-item">
         <div class="entry-row" onclick="toggleEntryDetail('${e.id}')">
+          <input type="checkbox" class="entry-select" data-id="${e.id}" ${selectedEntryIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleEntrySelection('${e.id}', this.checked)">
           <span class="status-dot" style="background:${TYPE_COLORS[e.type] || '#6b7280'};"></span>
           <div class="entry-row-main">
             <div class="entry-row-title">${escapeHtml(title)}</div>
@@ -808,6 +825,7 @@ function renderEntries(){
           ${audioHtml}
           ${notSyncedHtml}
           <div class="entry-actions">
+            <button type="button" class="secondary small" onclick="startEditEntry('${e.id}')">✏️ Edit</button>
             <button type="button" class="secondary small" onclick="downloadEntryPdf('${e.id}')">📄 PDF</button>
             <button type="button" class="secondary small" onclick="toggleEmailPanel('${e.id}')">✉️ Email</button>
             <button type="button" class="danger small" onclick="deleteEntry('${e.id}')">Delete</button>
@@ -838,7 +856,44 @@ function renderEntries(){
       </div>
     `;
   }).join('');
+
+  updateBulkPdfBar();
 }
+
+function toggleEntrySelection(id, checked){
+  if(checked) selectedEntryIds.add(id); else selectedEntryIds.delete(id);
+  updateBulkPdfBar();
+}
+window.toggleEntrySelection = toggleEntrySelection;
+
+function updateBulkPdfBar(){
+  const count = selectedEntryIds.size;
+  document.getElementById('bulkSelectedCount').textContent = count > 0
+    ? count + ' selected'
+    : 'Tick entries below to combine into one PDF';
+  document.getElementById('downloadSelectedPdfBtn').disabled = count === 0;
+}
+
+document.getElementById('downloadSelectedPdfBtn').onclick = async () => {
+  let ids = Array.from(selectedEntryIds).filter(id => entries.some(e => e.id === id));
+  if(ids.length === 0) return;
+  ids.sort((a, b) => new Date(entries.find(e => e.id === a).dateTime) - new Date(entries.find(e => e.id === b).dateTime));
+
+  const btn = document.getElementById('downloadSelectedPdfBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Building PDF...';
+  try{
+    const doc = await buildCombinedPdfDoc(ids);
+    doc.save(`delmond-log-${ids.length}-entries.pdf`);
+  }catch(err){
+    alert('Could not build the combined PDF: ' + err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+    updateBulkPdfBar();
+  }
+};
 
 function toggleEntryDetail(id){
   const el = document.getElementById('detail-' + id);
@@ -955,12 +1010,10 @@ function loadPlanWithMarkerAsJpeg(src, marker){
   });
 }
 
-async function buildEntryPdfDoc(id){
+async function drawEntryIntoDoc(doc, id){
   const e = entries.find(x => x.id === id);
   if(!e) throw new Error('Entry not found');
 
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const marginX = 14;
     const maxWidth = pageWidth - marginX * 2;
@@ -1054,7 +1107,22 @@ async function buildEntryPdfDoc(id){
       doc.setFontSize(10);
       doc.text('A voice recording is attached to this entry in the app on the capturing device (not included here).', marginX, y);
     }
+}
 
+async function buildEntryPdfDoc(id){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  await drawEntryIntoDoc(doc, id);
+  return doc;
+}
+
+async function buildCombinedPdfDoc(ids){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  for(let i = 0; i < ids.length; i++){
+    if(i > 0) doc.addPage();
+    await drawEntryIntoDoc(doc, ids[i]);
+  }
   return doc;
 }
 
@@ -1216,6 +1284,7 @@ document.getElementById('recordBtn').onclick = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recordedChunks = [];
     finalTranscript = '';
+    existingAudioDataUrl = null;
     document.getElementById('transcriptText').value = '';
     document.getElementById('transcriptWrap').style.display = SpeechRecognitionImpl ? 'block' : 'none';
 
@@ -1226,6 +1295,7 @@ document.getElementById('recordBtn').onclick = async () => {
       const audioEl = document.getElementById('audioPreview');
       audioEl.src = URL.createObjectURL(currentAudioBlob);
       audioEl.style.display = 'block';
+      document.getElementById('removeAudioBtn').style.display = 'inline-block';
       stream.getTracks().forEach(t => t.stop());
       btn.textContent = '🎙️ Start Recording';
       dot.classList.remove('active');
@@ -1278,6 +1348,105 @@ document.getElementById('aiCleanBtn').onclick = async () => {
   }
 };
 
+function resetEntryForm(){
+  editingEntryId = null;
+  existingAudioDataUrl = null;
+  document.getElementById('entryNotes').value = '';
+  document.getElementById('entryDateTime').value = '';
+  document.getElementById('entryLevel').value = '';
+  document.getElementById('entryArea').value = '';
+  document.getElementById('entryTaskType').value = '';
+  document.getElementById('taskTypeWrap').style.display = 'none';
+  document.getElementById('areaMarkerWrap').style.display = 'none';
+  clearAreaMarker();
+  loadLevelPlan('');
+  document.getElementById('entryProgress').value = '';
+  document.getElementById('entryTaskStart').value = '';
+  document.getElementById('entryTaskFinish').value = '';
+  document.getElementById('entryHandoverToDelmond').value = '';
+  document.getElementById('entryHandoverBackContractor').value = '';
+  document.getElementById('transcriptText').value = '';
+  document.getElementById('transcriptWrap').style.display = 'none';
+  document.getElementById('aiStatus').textContent = '';
+  currentPhotos = [];
+  currentAudioBlob = null;
+  document.getElementById('audioPreview').style.display = 'none';
+  document.getElementById('audioPreview').src = '';
+  document.getElementById('removeAudioBtn').style.display = 'none';
+  renderPhotoPreview();
+  document.getElementById('addEntryBtn').textContent = 'Add Entry';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  document.getElementById('editingNotice').style.display = 'none';
+}
+
+function startEditEntry(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+
+  editingEntryId = id;
+
+  document.getElementById('entryType').value = e.type || 'progress';
+  document.getElementById('entryDateTime').value = e.dateTime || '';
+  document.getElementById('entryNotes').value = e.notes || '';
+  document.getElementById('entryArea').value = e.area || '';
+  document.getElementById('entryProgress').value = e.progress || '';
+  document.getElementById('entryTaskStart').value = e.taskStart || '';
+  document.getElementById('entryTaskFinish').value = e.taskFinish || '';
+  document.getElementById('entryHandoverToDelmond').value = e.handoverToDelmond || '';
+  document.getElementById('entryHandoverBackContractor').value = e.handoverBackContractor || '';
+  document.getElementById('transcriptText').value = e.transcript || '';
+  document.getElementById('transcriptWrap').style.display = e.transcript ? 'block' : 'none';
+
+  document.getElementById('entryLevel').value = e.level || '';
+  const levelHasValue = !!e.level;
+  document.getElementById('taskTypeWrap').style.display = levelHasValue ? 'block' : 'none';
+  document.getElementById('areaMarkerWrap').style.display = levelHasValue ? 'block' : 'none';
+  loadLevelPlan(e.level || '');
+  document.getElementById('entryTaskType').value = e.taskType || '';
+
+  if(e.areaMarker){
+    setAreaMarker(e.areaMarker.x, e.areaMarker.y);
+  } else {
+    clearAreaMarker();
+  }
+
+  const localMedia = getLocalMedia(id);
+  currentPhotos = localMedia.photos.map(p => ({ file: null, preview: p }));
+  renderPhotoPreview();
+
+  currentAudioBlob = null;
+  existingAudioDataUrl = localMedia.audio || null;
+  const audioEl = document.getElementById('audioPreview');
+  if(existingAudioDataUrl){
+    audioEl.src = existingAudioDataUrl;
+    audioEl.style.display = 'block';
+    document.getElementById('removeAudioBtn').style.display = 'inline-block';
+  } else {
+    audioEl.style.display = 'none';
+    audioEl.src = '';
+    document.getElementById('removeAudioBtn').style.display = 'none';
+  }
+
+  document.getElementById('addEntryBtn').textContent = 'Update Entry';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+  document.getElementById('editingNotice').style.display = 'block';
+  document.getElementById('editingNotice').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.startEditEntry = startEditEntry;
+
+document.getElementById('cancelEditBtn').onclick = () => {
+  resetEntryForm();
+};
+
+document.getElementById('removeAudioBtn').onclick = () => {
+  currentAudioBlob = null;
+  existingAudioDataUrl = null;
+  const audioEl = document.getElementById('audioPreview');
+  audioEl.style.display = 'none';
+  audioEl.src = '';
+  document.getElementById('removeAudioBtn').style.display = 'none';
+};
+
 document.getElementById('addEntryBtn').onclick = async () => {
   const type = document.getElementById('entryType').value;
   const dateTime = document.getElementById('entryDateTime').value || nowLocalDateTimeValue();
@@ -1292,28 +1461,33 @@ document.getElementById('addEntryBtn').onclick = async () => {
   const handoverBackContractor = document.getElementById('entryHandoverBackContractor').value;
   const transcript = document.getElementById('transcriptText').value.trim();
 
-  if(!notes && currentPhotos.length === 0 && !currentAudioBlob){
+  if(!notes && currentPhotos.length === 0 && !currentAudioBlob && !existingAudioDataUrl){
     alert('Add some notes, a photo, or a voice recording before saving.');
     return;
   }
 
   const addBtn = document.getElementById('addEntryBtn');
   addBtn.disabled = true;
-  addBtn.textContent = 'Saving...';
+  addBtn.textContent = editingEntryId ? 'Updating...' : 'Saving...';
 
   try{
-    const entryRef = db.collection('entries').doc();
+    const entryId = editingEntryId || db.collection('entries').doc().id;
 
     const photoDataUrls = currentPhotos.map(p => p.preview);
     let audioDataUrl = null;
     if(currentAudioBlob){
       audioDataUrl = await blobToDataUrl(currentAudioBlob);
-    }
-    if(photoDataUrls.length || audioDataUrl){
-      saveLocalMedia(entryRef.id, photoDataUrls, audioDataUrl);
+    } else if(existingAudioDataUrl){
+      audioDataUrl = existingAudioDataUrl;
     }
 
-    await entryRef.set({
+    if(photoDataUrls.length || audioDataUrl){
+      saveLocalMedia(entryId, photoDataUrls, audioDataUrl);
+    } else if(editingEntryId){
+      lsRemove(LS_MEDIA_PREFIX + entryId);
+    }
+
+    const entryData = {
       type,
       dateTime,
       notes,
@@ -1328,45 +1502,33 @@ document.getElementById('addEntryBtn').onclick = async () => {
       handoverBackContractor,
       transcript,
       hasPhotos: photoDataUrls.length > 0,
-      hasAudio: !!audioDataUrl,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+      hasAudio: !!audioDataUrl
+    };
 
-    document.getElementById('entryNotes').value = '';
-    document.getElementById('entryDateTime').value = '';
-    document.getElementById('entryLevel').value = '';
-    document.getElementById('entryArea').value = '';
-    document.getElementById('entryTaskType').value = '';
-    document.getElementById('taskTypeWrap').style.display = 'none';
-    document.getElementById('areaMarkerWrap').style.display = 'none';
-    clearAreaMarker();
-    loadLevelPlan('');
-    document.getElementById('entryProgress').value = '';
-    document.getElementById('entryTaskStart').value = '';
-    document.getElementById('entryTaskFinish').value = '';
-    document.getElementById('entryHandoverToDelmond').value = '';
-    document.getElementById('entryHandoverBackContractor').value = '';
-    document.getElementById('transcriptText').value = '';
-    document.getElementById('transcriptWrap').style.display = 'none';
-    document.getElementById('aiStatus').textContent = '';
-    currentPhotos = [];
-    currentAudioBlob = null;
-    document.getElementById('audioPreview').style.display = 'none';
-    document.getElementById('audioPreview').src = '';
-    renderPhotoPreview();
+    const wasEditing = !!editingEntryId;
+    if(wasEditing){
+      await db.collection('entries').doc(entryId).update(entryData);
+    } else {
+      entryData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('entries').doc(entryId).set(entryData);
+    }
 
-    setTimeout(() => {
-      const newDetail = document.getElementById('detail-' + entryRef.id);
-      if(newDetail){
-        newDetail.style.display = 'block';
-        newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 300);
+    resetEntryForm();
+
+    if(!wasEditing){
+      setTimeout(() => {
+        const newDetail = document.getElementById('detail-' + entryId);
+        if(newDetail){
+          newDetail.style.display = 'block';
+          newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+    }
   }catch(err){
     alert('Failed to save entry: ' + err.message);
   }finally{
     addBtn.disabled = false;
-    addBtn.textContent = 'Add Entry';
+    addBtn.textContent = editingEntryId ? 'Update Entry' : 'Add Entry';
   }
 };
 
