@@ -544,23 +544,38 @@ if(window.pdfjsLib){
 }
 
 const LS_MEDIA_PREFIX = 'siteLog.media.';
+const MAX_PHOTOS_PER_ENTRY = 4;
+const PHOTO_MAX_WIDTH = 900;
+const PHOTO_JPEG_QUALITY = 0.5;
+const MAX_ENTRY_PHOTOS_BYTES = 900000;
 
-function saveLocalMedia(entryId, photos, audio){
+function saveLocalMedia(entryId, audio){
   try{
-    lsSet(LS_MEDIA_PREFIX + entryId, JSON.stringify({ photos, audio }));
+    lsSet(LS_MEDIA_PREFIX + entryId, JSON.stringify({ audio }));
   }catch(e){
-    console.warn('Could not save photos/audio locally (may be too large for this browser)', e);
+    console.warn('Could not save the voice recording locally (may be too large for this browser)', e);
   }
 }
 
 function getLocalMedia(entryId){
   const raw = lsGet(LS_MEDIA_PREFIX + entryId, null);
-  if(!raw) return { photos: [], audio: null };
+  if(!raw) return { audio: null };
   try{
     const parsed = JSON.parse(raw);
-    return { photos: parsed.photos || [], audio: parsed.audio || null };
+    return { audio: parsed.audio || null };
   }catch(e){
-    return { photos: [], audio: null };
+    return { audio: null };
+  }
+}
+
+function getLegacyLocalPhotos(entryId){
+  const raw = lsGet(LS_MEDIA_PREFIX + entryId, null);
+  if(!raw) return [];
+  try{
+    const parsed = JSON.parse(raw);
+    return parsed.photos || [];
+  }catch(e){
+    return [];
   }
 }
 
@@ -811,7 +826,7 @@ function autoCropCanvas(canvas){
   return out;
 }
 
-function canvasToResizedJpeg(canvas, maxWidth){
+function canvasToResizedJpeg(canvas, maxWidth, quality){
   let source = canvas;
   if(source.width > maxWidth){
     const scale = maxWidth / source.width;
@@ -821,7 +836,7 @@ function canvasToResizedJpeg(canvas, maxWidth){
     out.getContext('2d').drawImage(source, 0, 0, out.width, out.height);
     source = out;
   }
-  return source.toDataURL('image/jpeg', 0.72);
+  return source.toDataURL('image/jpeg', quality === undefined ? 0.72 : quality);
 }
 
 function fileToCanvas(file){
@@ -1212,7 +1227,8 @@ function renderEntries(){
     const subtitle = e.notes ? e.notes : (e.area || 'No notes');
 
     const localMedia = getLocalMedia(e.id);
-    const photos = localMedia.photos;
+    const photos = (e.photos && e.photos.length) ? e.photos : (e.hasPhotos ? getLegacyLocalPhotos(e.id) : []);
+    const photosAreLegacyLocal = !(e.photos && e.photos.length) && photos.length > 0;
     const heroPhoto = photos[0] ? `<img class="entry-hero-photo" src="${photos[0]}" onclick="window.open(this.src)">` : '';
     const restPhotos = photos.slice(1).map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('');
     const audioHtml = localMedia.audio ? `<audio controls src="${localMedia.audio}"></audio>` : '';
@@ -1221,7 +1237,7 @@ function renderEntries(){
     if(e.hasAudio && !localMedia.audio) notSyncedBits.push('🎙️ voice recording');
     const notSyncedHtml = notSyncedBits.length
       ? `<div class="entry-tags">${notSyncedBits.join(' and ')} captured on the original device — not synced to this one.</div>`
-      : '';
+      : (photosAreLegacyLocal ? `<div class="entry-tags">📷 photo(s) saved before syncing was added — only visible on this device. Edit and re-save the entry to sync them.</div>` : '');
 
     const locationBits = [];
     if(e.level) locationBits.push('Level: ' + escapeHtml(e.level));
@@ -1533,6 +1549,7 @@ async function drawEntryIntoDoc(doc, id){
     y += notesLines.length * 5.5 + 6;
 
     const localMedia = getLocalMedia(e.id);
+    const pdfPhotos = (e.photos && e.photos.length) ? e.photos : (e.hasPhotos ? getLegacyLocalPhotos(e.id) : []);
     const planImgUrl = getPlanForLevel(e.level);
 
     if(e.areaMarker && planImgUrl){
@@ -1549,12 +1566,12 @@ async function drawEntryIntoDoc(doc, id){
       }catch(err){ console.warn('Could not embed plan image', err); }
     }
 
-    if(localMedia.photos.length){
+    if(pdfPhotos.length){
       doc.setFont(undefined, 'bold');
       if(y > 260){ doc.addPage(); y = 18; }
       doc.text('Photos', marginX, y);
       y += 6;
-      for(const p of localMedia.photos){
+      for(const p of pdfPhotos){
         try{
           const img = await loadImageAsJpeg(p);
           const w = 85;
@@ -1688,8 +1705,17 @@ document.getElementById('saveProjectBtn').onclick = async () => {
 document.getElementById('photoInput').onchange = async (ev) => {
   const files = Array.from(ev.target.files);
   for(const f of files){
-    const dataUrl = await fileToDataUrl(f);
-    currentPhotos.push({ file: f, preview: dataUrl });
+    if(currentPhotos.length >= MAX_PHOTOS_PER_ENTRY){
+      alert(`Up to ${MAX_PHOTOS_PER_ENTRY} photos per entry — this keeps entries small enough to sync to every device.`);
+      break;
+    }
+    try{
+      const canvas = await fileToCanvas(f);
+      const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
+      currentPhotos.push({ file: null, preview: dataUrl });
+    }catch(err){
+      console.warn('Could not process photo', err);
+    }
   }
   ev.target.value = '';
   renderPhotoPreview();
@@ -1847,7 +1873,8 @@ function startEditEntry(id){
   }
 
   const localMedia = getLocalMedia(id);
-  currentPhotos = localMedia.photos.map(p => ({ file: null, preview: p }));
+  const editPhotos = (e.photos && e.photos.length) ? e.photos : (e.hasPhotos ? getLegacyLocalPhotos(id) : []);
+  currentPhotos = editPhotos.map(p => ({ file: null, preview: p }));
   renderPhotoPreview();
 
   currentAudioBlob = null;
@@ -1910,6 +1937,12 @@ document.getElementById('addEntryBtn').onclick = async () => {
     const entryId = editingEntryId || db.collection('entries').doc().id;
 
     const photoDataUrls = currentPhotos.map(p => p.preview);
+    const photosBytes = photoDataUrls.reduce((sum, p) => sum + p.length, 0);
+    if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
+      alert('These photos are too large to sync to every device. Please remove a photo or attach fewer photos, then try again.');
+      return;
+    }
+
     let audioDataUrl = null;
     if(currentAudioBlob){
       audioDataUrl = await blobToDataUrl(currentAudioBlob);
@@ -1917,8 +1950,8 @@ document.getElementById('addEntryBtn').onclick = async () => {
       audioDataUrl = existingAudioDataUrl;
     }
 
-    if(photoDataUrls.length || audioDataUrl){
-      saveLocalMedia(entryId, photoDataUrls, audioDataUrl);
+    if(audioDataUrl){
+      saveLocalMedia(entryId, audioDataUrl);
     } else if(editingEntryId){
       lsRemove(LS_MEDIA_PREFIX + entryId);
     }
@@ -1937,6 +1970,7 @@ document.getElementById('addEntryBtn').onclick = async () => {
       handoverToDelmond,
       handoverBackContractor,
       transcript,
+      photos: photoDataUrls,
       hasPhotos: photoDataUrls.length > 0,
       hasAudio: !!audioDataUrl
     };
