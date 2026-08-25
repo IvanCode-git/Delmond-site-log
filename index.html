@@ -267,7 +267,7 @@
   <div class="header-actions">
     <div id="projectPill"></div>
     <div id="sessionPill" class="session-pill"></div>
-    <button id="lockBtn" class="small">🔒 Lock</button>
+    <button id="lockBtn" class="small">🔓 Log Out</button>
   </div>
 </header>
 
@@ -607,9 +607,9 @@ function lsRemove(key){
 const USERS = {
   val: { password: '800911', role: 'pm', name: 'Val', roleLabel: 'Project Manager' },
   deniz: { password: '2929', role: 'supervisor', name: 'Deniz', roleLabel: 'Supervisor' },
-  lab: { password: '1919', role: 'labourer', name: 'Labourer', roleLabel: 'Labourer' }
+  lab: { password: '1919', role: 'labourer', name: 'Labourer', roleLabel: 'Labourer' },
+  ivan: { password: '2007', role: 'engineer', name: 'Ivan', roleLabel: 'Software Engineer' }
 };
-const LS_SESSION = 'siteLog.session';
 let currentSession = null;
 
 function showLockScreen(){
@@ -635,7 +635,6 @@ function attemptUnlock(){
   const user = USERS[username];
   if(user && password === user.password){
     currentSession = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
-    lsSet(LS_SESSION, JSON.stringify(currentSession));
     applySession();
     hideLockScreen();
   } else {
@@ -653,24 +652,13 @@ document.getElementById('passwordInput').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') attemptUnlock();
 });
 document.getElementById('lockBtn').onclick = () => {
-  lsRemove(LS_SESSION);
   currentSession = null;
   applySession();
   showLockScreen();
 };
 
-const savedSession = lsGet(LS_SESSION, null);
-if(savedSession){
-  try{
-    currentSession = JSON.parse(savedSession);
-    applySession();
-    hideLockScreen();
-  }catch(e){
-    showLockScreen();
-  }
-} else {
-  showLockScreen();
-}
+lsRemove('siteLog.session');
+showLockScreen();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
