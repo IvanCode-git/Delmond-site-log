@@ -221,6 +221,30 @@
   .status-badge.pending{background:#fef3c7; color:#b45309;}
   .status-badge.accepted{background:#dcfce7; color:var(--ok);}
   .status-badge.dismissed{background:#f3f4f6; color:var(--muted);}
+
+  .nav-badge{
+    background:var(--danger); color:#fff; font-size:10px; font-weight:800;
+    border-radius:999px; min-width:16px; height:16px; line-height:16px; text-align:center;
+    padding:0 4px; margin-left:3px; vertical-align:top; display:inline-block;
+  }
+  .contact-row{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer;}
+  .contact-row:last-child{border-bottom:none;}
+  .contact-avatar{
+    width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;
+  }
+  .contact-info{flex:1; min-width:0;}
+  .contact-name{font-weight:700; font-size:14px;}
+  .contact-preview{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .contact-meta{font-size:11px; color:var(--muted); text-align:right; flex-shrink:0;}
+  .unread-count{
+    display:inline-block; background:var(--danger); color:#fff; font-size:11px; font-weight:800;
+    border-radius:999px; min-width:18px; height:18px; line-height:18px; text-align:center; padding:0 5px; margin-top:4px;
+  }
+  .msg-row{padding:8px 12px; border-radius:12px; margin-bottom:8px; font-size:14px; max-width:80%; word-wrap:break-word;}
+  .msg-row.mine{background:var(--accent); color:#fff; margin-left:auto; border-bottom-right-radius:2px;}
+  .msg-row.theirs{background:#f4f5f7; color:var(--text); margin-right:auto; border-bottom-left-radius:2px;}
+  .msg-meta{font-size:10px; opacity:.75; margin-top:3px;}
   .comment-input{
     flex:1; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:14px;
   }
@@ -597,6 +621,27 @@
 
   </div>
 
+  <div id="messagesView" style="display:none;">
+
+    <div class="card" id="messagesContactsCard">
+      <h2>Messages</h2>
+      <div id="messagesContactList"></div>
+    </div>
+
+    <div class="card" id="messagesThreadCard" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <button type="button" class="secondary small" id="backToContactsBtn">← Back</button>
+        <h2 style="margin:0;" id="messageThreadTitle"></h2>
+      </div>
+      <div id="messageThreadList" style="display:flex; flex-direction:column; max-height:55vh; overflow-y:auto; padding:4px;"></div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" class="comment-input" id="messageInput" placeholder="Type a message...">
+        <button type="button" id="sendMessageBtn">Send</button>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 
 <footer>Everything syncs live across every device you're signed in on.</footer>
@@ -607,6 +652,7 @@
   <button data-tab="requests" data-roles="pm,supervisor,engineer"><span class="nav-icon">📥</span>Requests</button>
   <button data-tab="dashboard" data-roles="pm,supervisor,engineer"><span class="nav-icon">📊</span>Dashboard</button>
   <button data-tab="requestEntry" data-roles="labourer"><span class="nav-icon">✍️</span>Request Entry</button>
+  <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer"><span class="nav-icon">💬</span>Messages<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -808,7 +854,23 @@ async function sendPushNotification(targetRoles, title, body){
   }
 }
 
-const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView' };
+async function sendPushNotificationToUser(username, title, body){
+  if(!NOTIFY_WORKER_URL || NOTIFY_WORKER_URL === 'NOTIFY_WORKER_URL_PLACEHOLDER') return;
+  try{
+    const snapshot = await db.collection('pushTokens').where('username', '==', username).get();
+    const tokens = snapshot.docs.map(d => d.id);
+    if(tokens.length === 0) return;
+    await fetch(NOTIFY_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens, title, body })
+    });
+  }catch(err){
+    console.warn('Could not send push notification', err);
+  }
+}
+
+const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', messages: 'messagesView' };
 
 function hideAllAppUI(){
   Object.values(VIEW_IDS).forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -827,6 +889,7 @@ function showTab(tab){
   if(tab === 'tasks') renderTasks();
   if(tab === 'requests') renderRequests();
   if(tab === 'requestEntry') renderRequests();
+  if(tab === 'messages') resetMessagesView();
 }
 
 function applyRoleAccess(){
@@ -852,6 +915,7 @@ function attemptUnlock(){
     applySession();
     applyRoleAccess();
     updateNotifyButton();
+    updateMessagesNavBadge();
     registerPushToken();
     hideLockScreen();
   } else {
@@ -872,6 +936,7 @@ document.getElementById('lockBtn').onclick = () => {
   currentSession = null;
   applySession();
   updateNotifyButton();
+  updateMessagesNavBadge();
   hideAllAppUI();
   showLockScreen();
 };
@@ -1217,6 +1282,8 @@ let project = {};
 let entries = [];
 let tasks = [];
 let entryRequests = [];
+let messages = [];
+let activeConversationUsername = null;
 let currentPhotos = [];
 let currentTaskPhotos = [];
 let currentRequestPhotos = [];
@@ -1254,6 +1321,7 @@ function attachFirestoreListeners(retriesLeft){
   let levelsConfigUnsub = null;
   let tasksUnsub = null;
   let requestsUnsub = null;
+  let messagesUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -1265,6 +1333,7 @@ function attachFirestoreListeners(retriesLeft){
     if(levelsConfigUnsub) levelsConfigUnsub();
     if(tasksUnsub) tasksUnsub();
     if(requestsUnsub) requestsUnsub();
+    if(messagesUnsub) messagesUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -1323,6 +1392,11 @@ function attachFirestoreListeners(retriesLeft){
   requestsUnsub = db.collection('entryRequests').onSnapshot((snapshot) => {
     entryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderRequests();
+  }, handleSyncError);
+
+  messagesUnsub = db.collection('messages').onSnapshot((snapshot) => {
+    messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderMessages();
   }, handleSyncError);
 }
 
@@ -2618,6 +2692,145 @@ async function dismissRequest(id){
   }
 }
 window.dismissRequest = dismissRequest;
+
+// ---- Direct messages (any signed-in person to any other) ----
+
+function getConversationId(userA, userB){
+  return [userA, userB].sort().join('_');
+}
+
+function resetMessagesView(){
+  activeConversationUsername = null;
+  document.getElementById('messagesThreadCard').style.display = 'none';
+  document.getElementById('messagesContactsCard').style.display = 'block';
+  renderMessagesContactList();
+}
+
+function renderMessages(){
+  updateMessagesNavBadge();
+  if(activeConversationUsername){
+    renderMessageThread();
+  } else {
+    renderMessagesContactList();
+  }
+}
+
+function updateMessagesNavBadge(){
+  const badge = document.getElementById('messagesNavBadge');
+  if(!badge) return;
+  if(!currentSession){
+    badge.style.display = 'none';
+    return;
+  }
+  const unread = messages.filter(m => m.toUsername === currentSession.username && !m.read).length;
+  if(unread > 0){
+    badge.textContent = unread;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderMessagesContactList(){
+  const list = document.getElementById('messagesContactList');
+  if(!list || !currentSession) return;
+  const contacts = Object.keys(USERS).filter(u => u !== currentSession.username);
+  list.innerHTML = contacts.map(username => {
+    const info = USERS[username];
+    const convId = getConversationId(currentSession.username, username);
+    const convMessages = messages.filter(m => m.conversationId === convId).sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
+    const last = convMessages[convMessages.length - 1];
+    const unreadCount = convMessages.filter(m => m.toUsername === currentSession.username && !m.read).length;
+    const preview = last ? escapeHtml((last.fromUsername === currentSession.username ? 'You: ' : '') + last.text) : 'No messages yet';
+    const lastTime = (last && last.createdAt && last.createdAt.toDate) ? last.createdAt.toDate().toLocaleString() : '';
+    return `
+      <div class="contact-row" onclick="openConversation('${username}')">
+        <div class="contact-avatar">${escapeHtml(info.name.charAt(0))}</div>
+        <div class="contact-info">
+          <div class="contact-name">${escapeHtml(info.name)} <span style="font-weight:400; color:var(--muted); font-size:12px;">· ${escapeHtml(info.roleLabel)}</span></div>
+          <div class="contact-preview">${preview}</div>
+        </div>
+        <div class="contact-meta">
+          ${lastTime}
+          ${unreadCount > 0 ? `<div class="unread-count">${unreadCount}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMessageThread(){
+  if(!activeConversationUsername || !currentSession) return;
+  const convId = getConversationId(currentSession.username, activeConversationUsername);
+  const convMessages = messages.filter(m => m.conversationId === convId).sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
+  const list = document.getElementById('messageThreadList');
+  list.innerHTML = convMessages.length
+    ? convMessages.map(m => {
+        const mine = m.fromUsername === currentSession.username;
+        const time = (m.createdAt && m.createdAt.toDate) ? m.createdAt.toDate().toLocaleString() : 'Sending…';
+        return `
+          <div class="msg-row ${mine ? 'mine' : 'theirs'}">
+            <div>${escapeHtml(m.text)}</div>
+            <div class="msg-meta">${time}</div>
+          </div>
+        `;
+      }).join('')
+    : '<div class="empty">No messages yet — say hello.</div>';
+  list.scrollTop = list.scrollHeight;
+}
+
+function openConversation(username){
+  activeConversationUsername = username;
+  document.getElementById('messageThreadTitle').textContent = `${USERS[username].name} (${USERS[username].roleLabel})`;
+  document.getElementById('messagesContactsCard').style.display = 'none';
+  document.getElementById('messagesThreadCard').style.display = 'block';
+  renderMessageThread();
+  markConversationRead(username);
+}
+window.openConversation = openConversation;
+
+document.getElementById('backToContactsBtn').onclick = resetMessagesView;
+
+async function markConversationRead(withUsername){
+  if(!currentSession) return;
+  const unread = messages.filter(m => m.toUsername === currentSession.username && m.fromUsername === withUsername && !m.read);
+  if(unread.length === 0) return;
+  try{
+    const batch = db.batch();
+    unread.forEach(m => batch.update(db.collection('messages').doc(m.id), { read: true }));
+    await batch.commit();
+  }catch(err){
+    console.warn('Could not mark messages read', err);
+  }
+}
+
+document.getElementById('sendMessageBtn').onclick = async () => {
+  const input = document.getElementById('messageInput');
+  const text = input.value.trim();
+  if(!text || !activeConversationUsername) return;
+  const btn = document.getElementById('sendMessageBtn');
+  btn.disabled = true;
+  try{
+    await db.collection('messages').add({
+      text,
+      fromUsername: currentSession.username,
+      fromName: currentSession.name,
+      toUsername: activeConversationUsername,
+      conversationId: getConversationId(currentSession.username, activeConversationUsername),
+      read: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    input.value = '';
+    sendPushNotificationToUser(activeConversationUsername, `Message from ${currentSession.name}`, text.slice(0, 120));
+  }catch(err){
+    alert('Failed to send message: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
+document.getElementById('messageInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') document.getElementById('sendMessageBtn').click();
+});
 
 function renderDashboard(){
   const weekEndingInput = document.getElementById('weekEnding');
