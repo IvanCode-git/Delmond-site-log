@@ -773,6 +773,8 @@ function applySession(){
     : '';
 }
 
+let pushTokenRegistered = false;
+
 function updateNotifyButton(){
   const btn = document.getElementById('notifyBtn');
   if(!currentSession || !messaging){
@@ -780,9 +782,16 @@ function updateNotifyButton(){
     return;
   }
   btn.style.display = '';
+  btn.title = '';
   if(Notification.permission === 'granted'){
-    btn.textContent = '🔔 Notifications On';
-    btn.disabled = true;
+    if(pushTokenRegistered){
+      btn.textContent = '🔔 Notifications On';
+      btn.disabled = true;
+    } else {
+      btn.textContent = '⚠️ Setup Needed';
+      btn.disabled = false;
+      btn.title = 'Your browser allows notifications, but the app isn\'t fully connected yet. Tap to retry.';
+    }
   } else if(Notification.permission === 'denied'){
     btn.textContent = '🔕 Notifications Blocked';
     btn.disabled = true;
@@ -797,16 +806,19 @@ async function registerPushToken(){
   try{
     const registration = await navigator.serviceWorker.ready;
     const token = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: registration });
-    if(!token) return;
+    if(!token) throw new Error('No token returned');
     await db.collection('pushTokens').doc(token).set({
       token,
       role: currentSession.role,
       username: currentSession.username,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    pushTokenRegistered = true;
   }catch(err){
     console.warn('Could not register push token', err);
+    pushTokenRegistered = false;
   }
+  updateNotifyButton();
 }
 
 async function enablePushNotifications(){
