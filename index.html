@@ -30,9 +30,9 @@
   .container{max-width:900px; margin:0 auto; padding:16px 16px 88px;}
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:16px; margin-bottom:16px;
+    padding:18px; margin-bottom:16px;
   }
-  .card h2{margin:0 0 4px; font-size:16px; color:var(--text);}
+  .card h2{margin:0 0 14px; font-size:16px; color:var(--text);}
   .row{display:flex; gap:16px; flex-wrap:wrap;}
   .field{flex:1; min-width:150px; padding:10px 0 8px; border-bottom:1px solid var(--border);}
   label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
@@ -45,8 +45,29 @@
   button{
     background:var(--accent); color:#fff; border:none; border-radius:6px;
     padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600;
+    transition:background .15s ease, opacity .15s ease, transform .1s ease;
   }
   button:hover{background:var(--accent-dark);}
+  button:active{transform:scale(.97);}
+  button:disabled{opacity:.55; cursor:default; transform:none;}
+
+  .section-label{
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--accent); margin:20px 0 2px; padding-top:16px; border-top:1px solid var(--border);
+  }
+  .section-label:first-of-type{margin-top:0; padding-top:0; border-top:none;}
+
+  .collapsible-header{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;
+  }
+  .collapsible-header .chevron{
+    color:var(--muted); font-size:12px; transition:transform .2s ease; flex-shrink:0; margin-left:8px;
+  }
+  .collapsible-header.open .chevron{transform:rotate(90deg);}
+  .collapsible-body{
+    max-height:0; overflow:hidden; transition:max-height .28s ease, opacity .2s ease; opacity:0;
+  }
+  .collapsible-body.open{max-height:2600px; opacity:1;}
   button.secondary{background:#fff; color:var(--accent); border:1px solid var(--accent);}
   button.danger{background:#fff; color:var(--danger); border:1px solid var(--danger);}
   button.small{padding:5px 10px; font-size:12px;}
@@ -76,7 +97,11 @@
   .entry-row-title{font-size:14px; font-weight:700; color:var(--text);}
   .entry-row-sub{font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .entry-row-date{font-size:11px; color:var(--muted); white-space:nowrap; flex-shrink:0; padding-top:2px;}
-  .entry-detail{padding:0 2px 14px;}
+  .entry-detail{
+    max-height:0; overflow:hidden; opacity:0; padding:0 2px;
+    transition:max-height .28s ease, opacity .2s ease, padding .28s ease;
+  }
+  .entry-detail.open{max-height:3000px; opacity:1; padding:0 2px 14px;}
   .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:8px; margin-bottom:10px; cursor:pointer; display:block;}
   .entry-body{margin-top:8px; font-size:14px; white-space:pre-wrap;}
   .entry-photos{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
@@ -209,31 +234,37 @@
   <div id="logView">
 
     <div class="card">
-      <h2>Project Details</h2>
-      <div class="row">
-        <div class="field">
-          <label>Project / Site Name</label>
-          <input type="text" id="projectName" placeholder="e.g. 150 Holborn Fit-out">
-        </div>
-        <div class="field">
-          <label>Start Date</label>
-          <input type="date" id="startDate">
-        </div>
-        <div class="field">
-          <label>Finish Date (planned/actual)</label>
-          <input type="date" id="finishDate">
-        </div>
+      <div class="collapsible-header" id="projectDetailsHeader">
+        <h2 style="margin:0;">Project Details</h2>
+        <span class="chevron">▸</span>
       </div>
-      <div class="row">
-        <div class="field">
-          <label>Overall Progress (%)</label>
-          <input type="text" id="progressPercent" placeholder="e.g. 45">
-          <div class="progress-bar-outer" style="margin-top:8px;">
-            <div class="progress-bar-inner" id="progressBarInner" style="width:0%;"></div>
+      <div class="collapsible-body" id="projectDetailsBody">
+        <div style="height:14px;"></div>
+        <div class="row">
+          <div class="field">
+            <label>Project / Site Name</label>
+            <input type="text" id="projectName" placeholder="e.g. 150 Holborn Fit-out">
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" id="startDate">
+          </div>
+          <div class="field">
+            <label>Finish Date (planned/actual)</label>
+            <input type="date" id="finishDate">
           </div>
         </div>
+        <div class="row">
+          <div class="field">
+            <label>Overall Progress (%)</label>
+            <input type="text" id="progressPercent" placeholder="e.g. 45">
+            <div class="progress-bar-outer" style="margin-top:8px;">
+              <div class="progress-bar-inner" id="progressBarInner" style="width:0%;"></div>
+            </div>
+          </div>
+        </div>
+        <button id="saveProjectBtn" style="margin-top:8px;">Save Project Details</button>
       </div>
-      <button id="saveProjectBtn">Save Project Details</button>
     </div>
 
     <div class="card">
@@ -257,6 +288,7 @@
         </div>
       </div>
 
+      <div class="section-label">Location</div>
       <div class="field">
         <label>Level</label>
         <select id="entryLevel"></select>
@@ -286,6 +318,7 @@
         <select id="entryTaskType"></select>
       </div>
 
+      <div class="section-label">Progress</div>
       <div class="row">
         <div class="field">
           <label>Progress % (this task)</label>
@@ -301,20 +334,28 @@
         </div>
       </div>
 
-      <div class="row">
-        <div class="field">
-          <label>Handover to Delmond</label>
-          <input type="date" id="entryHandoverToDelmond">
-        </div>
-        <div class="field">
-          <label>Handover back to Main Contractor</label>
-          <input type="date" id="entryHandoverBackContractor">
-        </div>
+      <div class="collapsible-header" id="handoverHeader" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+        <div class="section-label" style="margin:0; padding:0; border:none;">Handover (optional)</div>
+        <span class="chevron">▸</span>
       </div>
-      <p style="font-size:12px; color:var(--muted); margin-top:-8px;">
-        Log "Handover to Delmond" now, then log a follow-on entry later for the same Level/Task with "Handover back to Main Contractor" filled in once that happens.
-      </p>
+      <div class="collapsible-body" id="handoverBody">
+        <div style="height:8px;"></div>
+        <div class="row">
+          <div class="field">
+            <label>Handover to Delmond</label>
+            <input type="date" id="entryHandoverToDelmond">
+          </div>
+          <div class="field">
+            <label>Handover back to Main Contractor</label>
+            <input type="date" id="entryHandoverBackContractor">
+          </div>
+        </div>
+        <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">
+          Log "Handover to Delmond" now, then log a follow-on entry later for the same Level/Task with "Handover back to Main Contractor" filled in once that happens.
+        </p>
+      </div>
 
+      <div class="section-label">Details</div>
       <div class="field">
         <label>Notes</label>
         <textarea id="entryNotes" placeholder="Describe what happened..."></textarea>
@@ -339,13 +380,12 @@
           <label>Transcript (auto-generated, edit if needed)</label>
           <textarea id="transcriptText"></textarea>
           <div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <button type="button" id="aiCleanBtn" class="secondary small">✨ AI Clean Up → Description</button>
-            <span id="aiStatus" style="font-size:12px; color:var(--muted);"></span>
+            <button type="button" id="useTranscriptBtn" class="secondary small">Use as Notes</button>
           </div>
         </div>
       </div>
 
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;">
         <button id="addEntryBtn">Add Entry</button>
         <button type="button" id="cancelEditBtn" class="secondary" style="display:none;">Cancel Edit</button>
       </div>
@@ -628,6 +668,21 @@ document.getElementById('planBox').addEventListener('click', (ev) => {
 
 document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
 
+function setCollapsible(headerId, bodyId, open){
+  document.getElementById(headerId).classList.toggle('open', open);
+  document.getElementById(bodyId).classList.toggle('open', open);
+}
+
+document.getElementById('projectDetailsHeader').onclick = () => {
+  const isOpen = document.getElementById('projectDetailsBody').classList.contains('open');
+  setCollapsible('projectDetailsHeader', 'projectDetailsBody', !isOpen);
+};
+
+document.getElementById('handoverHeader').onclick = () => {
+  const isOpen = document.getElementById('handoverBody').classList.contains('open');
+  setCollapsible('handoverHeader', 'handoverBody', !isOpen);
+};
+
 let project = {};
 let entries = [];
 let currentPhotos = [];
@@ -813,7 +868,7 @@ function renderEntries(){
           </div>
           <div class="entry-row-date">${dtDateStr}</div>
         </div>
-        <div class="entry-detail" id="detail-${e.id}" style="display:none;">
+        <div class="entry-detail" id="detail-${e.id}">
           ${heroPhoto}
           <div class="entry-tags"><span class="type-tag type-${e.type}">${typeLabel(e.type)}</span> &nbsp;${dtFullStr}</div>
           ${locationHtml}
@@ -836,7 +891,7 @@ function renderEntries(){
               <input type="text" id="emailTo-${e.id}" placeholder="name@company.com">
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
-              <button type="button" class="secondary small" onclick="draftEmail('${e.id}')">✨ Draft Email with AI</button>
+              <button type="button" class="secondary small" onclick="generateTemplateEmail('${e.id}')">📋 Generate Email Text</button>
               <span id="emailStatus-${e.id}" style="font-size:12px; color:var(--muted);"></span>
             </div>
             <div class="field">
@@ -898,7 +953,7 @@ document.getElementById('downloadSelectedPdfBtn').onclick = async () => {
 function toggleEntryDetail(id){
   const el = document.getElementById('detail-' + id);
   if(!el) return;
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  el.classList.toggle('open');
 }
 window.toggleEntryDetail = toggleEntryDetail;
 
@@ -909,55 +964,56 @@ function toggleEmailPanel(id){
 }
 window.toggleEmailPanel = toggleEmailPanel;
 
-function buildEntrySummaryText(e){
+const EMAIL_TEMPLATES = {
+  progress: { topic: 'a progress update', label: 'Progress Update' },
+  issue: { topic: 'an issue', label: 'Issue Raised' },
+  delay: { topic: 'a delay', label: 'Delay Notice' },
+  damage: { topic: 'damage caused by others', label: 'Damage by Others' }
+};
+
+function generateTemplateEmail(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  const statusEl = document.getElementById('emailStatus-' + id);
+  const tpl = EMAIL_TEMPLATES[e.type] || EMAIL_TEMPLATES.progress;
+
   const dt = new Date(e.dateTime);
   const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
-  const lines = [
-    'Project: ' + (project.name || 'Unnamed project'),
-    'Entry type: ' + typeLabel(e.type),
-    'Date/time: ' + dtStr,
+
+  const detailLines = [
     e.level ? 'Level: ' + e.level : '',
-    e.area ? 'Area note: ' + e.area : '',
-    e.taskType ? 'Task type: ' + e.taskType : '',
+    e.area ? 'Area: ' + e.area : '',
+    e.taskType ? 'Task: ' + e.taskType : '',
     (e.progress !== undefined && e.progress !== '') ? 'Progress: ' + e.progress + '%' : '',
     e.taskStart ? 'Task start date: ' + e.taskStart : '',
     e.taskFinish ? 'Task finish date: ' + e.taskFinish : '',
     e.handoverToDelmond ? 'Handover to Delmond: ' + e.handoverToDelmond : '',
-    e.handoverBackContractor ? 'Handover back to main contractor: ' + e.handoverBackContractor : '',
-    e.notes ? 'Notes: ' + e.notes : '',
-    e.hasPhotos ? 'Photos attached in app (on the capturing device)' : '',
-    e.hasAudio ? 'Voice recording attached in app (on the capturing device)' : ''
-  ].filter(Boolean);
-  return lines.join('\n');
-}
+    e.handoverBackContractor ? 'Handover back to main contractor: ' + e.handoverBackContractor : ''
+  ].filter(Boolean).join('\n');
 
-async function draftEmail(id){
-  const e = entries.find(x => x.id === id);
-  if(!e) return;
-  const statusEl = document.getElementById('emailStatus-' + id);
+  const mediaLine = (e.hasPhotos || e.hasAudio)
+    ? 'Supporting photos/voice notes were captured and are available in the Delmond Site Log app.\n\n'
+    : '';
 
-  statusEl.textContent = 'Drafting...';
-  try{
-    const raw = await callAiProxy(
-      'You draft short, professional emails summarizing a single construction site log entry for ' + (project.name || 'a construction site') + '. Given the log entry details, write a clear subject line and a concise professional email body suitable for sending to a contractor, consultant or client. Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape: {"subject":"...","body":"..."}',
-      buildEntrySummaryText(e),
-      500
-    );
-    let parsed;
-    try{
-      parsed = JSON.parse(raw);
-    }catch(parseErr){
-      throw new Error('Could not parse the AI response.');
-    }
-    document.getElementById('emailSubject-' + id).value = parsed.subject || '';
-    document.getElementById('emailBody-' + id).value = parsed.body || '';
-    statusEl.textContent = 'Draft ready — review before sending.';
-  }catch(err){
-    statusEl.textContent = '';
-    alert('AI draft failed: ' + err.message);
-  }
+  const body = `Hi,
+
+I am emailing about ${tpl.topic} on ${project.name || 'the project'}, logged on ${dtStr}.
+
+${detailLines || 'No further location/task details recorded.'}
+
+Notes:
+${e.notes || 'No additional notes.'}
+
+${mediaLine}Please see the attached PDF for the full entry report.
+
+Kind regards,
+${project.name ? project.name + ' Team' : 'Delmond Site Team'}`;
+
+  document.getElementById('emailSubject-' + id).value = `${tpl.label} — ${e.level || 'Site'}${e.taskType ? ' – ' + e.taskType : ''}`;
+  document.getElementById('emailBody-' + id).value = body;
+  statusEl.textContent = 'Draft ready — review before sending.';
 }
-window.draftEmail = draftEmail;
+window.generateTemplateEmail = generateTemplateEmail;
 
 function loadImageAsJpeg(src){
   return new Promise((resolve, reject) => {
@@ -1226,24 +1282,6 @@ document.getElementById('photoInput').onchange = async (ev) => {
   renderPhotoPreview();
 };
 
-const AI_PROXY_URL = 'AI_PROXY_URL_PLACEHOLDER';
-
-async function callAiProxy(system, message, maxTokens){
-  const res = await fetch(AI_PROXY_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ system, message, max_tokens: maxTokens })
-  });
-  if(!res.ok){
-    const errText = await res.text();
-    throw new Error('AI service error ' + res.status + ': ' + errText.slice(0, 200));
-  }
-  const data = await res.json();
-  const text = data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
-  if(!text) throw new Error('No response text received.');
-  return text;
-}
-
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let finalTranscript = '';
@@ -1318,33 +1356,17 @@ document.getElementById('recordBtn').onclick = async () => {
   }
 };
 
-document.getElementById('aiCleanBtn').onclick = async () => {
+document.getElementById('useTranscriptBtn').onclick = () => {
   const transcript = document.getElementById('transcriptText').value.trim();
-  const aiStatus = document.getElementById('aiStatus');
-
   if(!transcript){
-    alert('No transcript to clean up yet.');
+    alert('No transcript yet.');
     return;
   }
-
-  aiStatus.textContent = 'Cleaning up...';
-  try{
-    const cleaned = await callAiProxy(
-      'You clean up voice-to-text transcripts from construction site voice notes. Fix grammar, spelling, punctuation and filler words. Keep every technical detail, measurement, name and instruction exactly as stated - do not invent or omit information. Return only the cleaned-up description text, nothing else.',
-      transcript,
-      400
-    );
-
-    const notesEl = document.getElementById('entryNotes');
-    if(notesEl.value.trim() && !confirm('Replace current notes with the AI-cleaned description? Cancel to append instead.')){
-      notesEl.value = (notesEl.value.trim() + '\n\n' + cleaned).trim();
-    } else {
-      notesEl.value = cleaned;
-    }
-    aiStatus.textContent = 'Description added to notes.';
-  }catch(err){
-    aiStatus.textContent = '';
-    alert('AI clean-up failed: ' + err.message);
+  const notesEl = document.getElementById('entryNotes');
+  if(notesEl.value.trim() && !confirm('Replace current notes with the transcript? Cancel to append instead.')){
+    notesEl.value = (notesEl.value.trim() + '\n\n' + transcript).trim();
+  } else {
+    notesEl.value = transcript;
   }
 };
 
@@ -1367,7 +1389,6 @@ function resetEntryForm(){
   document.getElementById('entryHandoverBackContractor').value = '';
   document.getElementById('transcriptText').value = '';
   document.getElementById('transcriptWrap').style.display = 'none';
-  document.getElementById('aiStatus').textContent = '';
   currentPhotos = [];
   currentAudioBlob = null;
   document.getElementById('audioPreview').style.display = 'none';
@@ -1377,6 +1398,7 @@ function resetEntryForm(){
   document.getElementById('addEntryBtn').textContent = 'Add Entry';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('editingNotice').style.display = 'none';
+  setCollapsible('handoverHeader', 'handoverBody', false);
 }
 
 function startEditEntry(id){
@@ -1394,6 +1416,7 @@ function startEditEntry(id){
   document.getElementById('entryTaskFinish').value = e.taskFinish || '';
   document.getElementById('entryHandoverToDelmond').value = e.handoverToDelmond || '';
   document.getElementById('entryHandoverBackContractor').value = e.handoverBackContractor || '';
+  setCollapsible('handoverHeader', 'handoverBody', !!(e.handoverToDelmond || e.handoverBackContractor));
   document.getElementById('transcriptText').value = e.transcript || '';
   document.getElementById('transcriptWrap').style.display = e.transcript ? 'block' : 'none';
 
@@ -1519,7 +1542,7 @@ document.getElementById('addEntryBtn').onclick = async () => {
       setTimeout(() => {
         const newDetail = document.getElementById('detail-' + entryId);
         if(newDetail){
-          newDetail.style.display = 'block';
+          newDetail.classList.add('open');
           newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }, 300);
