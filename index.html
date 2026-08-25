@@ -136,13 +136,14 @@
   .lock-box img{width:64px; height:64px; margin-bottom:12px;}
   .lock-box h2{margin:0 0 4px; font-size:18px; color:var(--text);}
   .lock-box p{margin:0 0 16px; font-size:12px; color:var(--muted);}
-  #pinInput{
-    width:100%; text-align:center; letter-spacing:8px; font-size:20px;
+  .lock-box input{
+    width:100%; text-align:center; font-size:16px;
     padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;
   }
   #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px;}
   #lockScreen button{width:100%;}
   .header-actions{display:flex; align-items:center; gap:10px;}
+  .session-pill{font-size:12px; opacity:.9;}
   .header-actions button{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); font-weight:500;}
   .header-actions button:hover{background:rgba(255,255,255,.25);}
 
@@ -253,10 +254,11 @@
   <div class="lock-box">
     <img src="icons/icon-192.png" alt="Delmond">
     <h2>Delmond Site Log</h2>
-    <p>Enter PIN to continue</p>
-    <input type="password" id="pinInput" inputmode="numeric" maxlength="4" placeholder="••••">
+    <p>Sign in to continue</p>
+    <input type="text" id="usernameInput" placeholder="Username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password">
     <div id="pinError"></div>
-    <button id="pinSubmitBtn">Unlock</button>
+    <button id="pinSubmitBtn">Sign In</button>
   </div>
 </div>
 
@@ -264,6 +266,7 @@
   <h1>🏗️ Delmond Site Log</h1>
   <div class="header-actions">
     <div id="projectPill"></div>
+    <div id="sessionPill" class="session-pill"></div>
     <button id="lockBtn" class="small">🔒 Lock</button>
   </div>
 </header>
@@ -601,42 +604,70 @@ function lsRemove(key){
   catch(e){ console.warn('localStorage unavailable', e); }
 }
 
-const SITE_PIN = '2019';
-const LS_AUTHED = 'siteLog.authed';
+const USERS = {
+  val: { password: '800911', role: 'pm', name: 'Val', roleLabel: 'Project Manager' },
+  deniz: { password: '2929', role: 'supervisor', name: 'Deniz', roleLabel: 'Supervisor' },
+  lab: { password: '1919', role: 'labourer', name: 'Labourer', roleLabel: 'Labourer' }
+};
+const LS_SESSION = 'siteLog.session';
+let currentSession = null;
 
 function showLockScreen(){
   document.getElementById('lockScreen').style.display = 'flex';
-  document.getElementById('pinInput').value = '';
+  document.getElementById('usernameInput').value = '';
+  document.getElementById('passwordInput').value = '';
   document.getElementById('pinError').textContent = '';
-  document.getElementById('pinInput').focus();
+  document.getElementById('usernameInput').focus();
 }
 function hideLockScreen(){
   document.getElementById('lockScreen').style.display = 'none';
 }
 
+function applySession(){
+  document.getElementById('sessionPill').textContent = currentSession
+    ? `${currentSession.name} · ${currentSession.roleLabel}`
+    : '';
+}
+
 function attemptUnlock(){
-  const val = document.getElementById('pinInput').value.trim();
-  if(val === SITE_PIN){
-    lsSet(LS_AUTHED, 'true');
+  const username = document.getElementById('usernameInput').value.trim().toLowerCase();
+  const password = document.getElementById('passwordInput').value.trim();
+  const user = USERS[username];
+  if(user && password === user.password){
+    currentSession = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
+    lsSet(LS_SESSION, JSON.stringify(currentSession));
+    applySession();
     hideLockScreen();
   } else {
-    document.getElementById('pinError').textContent = 'Incorrect PIN, try again.';
-    document.getElementById('pinInput').value = '';
-    document.getElementById('pinInput').focus();
+    document.getElementById('pinError').textContent = 'Incorrect username or password, try again.';
+    document.getElementById('passwordInput').value = '';
+    document.getElementById('passwordInput').focus();
   }
 }
 
 document.getElementById('pinSubmitBtn').onclick = attemptUnlock;
-document.getElementById('pinInput').addEventListener('keydown', (ev) => {
+document.getElementById('usernameInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') document.getElementById('passwordInput').focus();
+});
+document.getElementById('passwordInput').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') attemptUnlock();
 });
 document.getElementById('lockBtn').onclick = () => {
-  lsRemove(LS_AUTHED);
+  lsRemove(LS_SESSION);
+  currentSession = null;
+  applySession();
   showLockScreen();
 };
 
-if(lsGet(LS_AUTHED, null) === 'true'){
-  hideLockScreen();
+const savedSession = lsGet(LS_SESSION, null);
+if(savedSession){
+  try{
+    currentSession = JSON.parse(savedSession);
+    applySession();
+    hideLockScreen();
+  }catch(e){
+    showLockScreen();
+  }
 } else {
   showLockScreen();
 }
