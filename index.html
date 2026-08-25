@@ -214,6 +214,13 @@
     display:inline-block; background:#dcfce7; color:var(--ok); font-size:10px; font-weight:800;
     text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-left:6px; letter-spacing:.03em;
   }
+  .status-badge{
+    display:inline-block; font-size:10px; font-weight:800;
+    text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-left:6px; letter-spacing:.03em;
+  }
+  .status-badge.pending{background:#fef3c7; color:#b45309;}
+  .status-badge.accepted{background:#dcfce7; color:var(--ok);}
+  .status-badge.dismissed{background:#f3f4f6; color:var(--muted);}
   .comment-input{
     flex:1; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:14px;
   }
@@ -514,13 +521,91 @@
 
   </div>
 
+  <div id="tasksView" style="display:none;">
+
+    <div class="card" id="assignTaskCard">
+      <h2>Assign a Task</h2>
+      <div class="field">
+        <label>Message</label>
+        <textarea id="taskMessage" placeholder="e.g. Clear debris from Level 3 stairwell before Friday"></textarea>
+      </div>
+      <div class="field">
+        <label>Photos (optional)</label>
+        <input type="file" id="taskPhotoInput" accept="image/*" multiple capture="environment">
+        <div class="photo-grid" id="taskPhotoPreview"></div>
+      </div>
+      <button type="button" id="assignTaskBtn">Send Task</button>
+    </div>
+
+    <div class="card">
+      <h2>Tasks</h2>
+      <div class="status-toggle" id="taskStatusFilters">
+        <button data-status="active" class="active">Active</button>
+        <button data-status="completed">✅ Completed</button>
+      </div>
+      <div id="tasksList"></div>
+    </div>
+
+  </div>
+
+  <div id="requestsView" style="display:none;">
+    <div class="card">
+      <h2>Entry Requests from Labourers</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">
+        Requests submitted from the Labourer account. Accept one to pre-fill a new Log Entry, or dismiss it.
+      </p>
+      <div id="requestsList"></div>
+    </div>
+  </div>
+
+  <div id="requestEntryView" style="display:none;">
+
+    <div class="card">
+      <h2>Request a Log Entry</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">
+        Describe what you've seen and it'll be sent straight to Val, Deniz and Ivan to turn into a proper log entry.
+      </p>
+      <div class="field">
+        <label>What type of update is this?</label>
+        <select id="requestType"></select>
+      </div>
+      <div class="field">
+        <label>Level</label>
+        <select id="requestLevel"></select>
+      </div>
+      <div class="field">
+        <label>Area (optional)</label>
+        <input type="text" id="requestArea" placeholder="e.g. near Zone A, by the core">
+      </div>
+      <div class="field">
+        <label>What's happened?</label>
+        <textarea id="requestNotes" placeholder="Describe what happened..."></textarea>
+      </div>
+      <div class="field">
+        <label>Photos (optional)</label>
+        <input type="file" id="requestPhotoInput" accept="image/*" multiple capture="environment">
+        <div class="photo-grid" id="requestPhotoPreview"></div>
+      </div>
+      <button type="button" id="submitRequestBtn">Send Request</button>
+    </div>
+
+    <div class="card">
+      <h2>Your Requests</h2>
+      <div id="myRequestsList"></div>
+    </div>
+
+  </div>
+
 </div>
 
-<footer>Log entries sync live across every device. Your PIN and AI key stay local to this browser only.</footer>
+<footer>Everything syncs live across every device you're signed in on.</footer>
 
 <nav class="bottom-nav">
-  <button data-tab="log" class="active"><span class="nav-icon">📋</span>Log</button>
-  <button data-tab="dashboard"><span class="nav-icon">📊</span>Dashboard</button>
+  <button data-tab="log" data-roles="pm,supervisor,engineer" class="active"><span class="nav-icon">📋</span>Log</button>
+  <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer"><span class="nav-icon">✅</span>Tasks</button>
+  <button data-tab="requests" data-roles="pm,supervisor,engineer"><span class="nav-icon">📥</span>Requests</button>
+  <button data-tab="dashboard" data-roles="pm,supervisor,engineer"><span class="nav-icon">📊</span>Dashboard</button>
+  <button data-tab="requestEntry" data-roles="labourer"><span class="nav-icon">✍️</span>Request Entry</button>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -629,6 +714,41 @@ function applySession(){
     : '';
 }
 
+const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView' };
+
+function hideAllAppUI(){
+  Object.values(VIEW_IDS).forEach(id => { document.getElementById(id).style.display = 'none'; });
+  document.querySelectorAll('.bottom-nav button').forEach(b => {
+    b.style.display = 'none';
+    b.classList.remove('active');
+  });
+}
+
+function showTab(tab){
+  Object.entries(VIEW_IDS).forEach(([t, id]) => {
+    document.getElementById(id).style.display = (t === tab) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if(tab === 'dashboard') renderDashboard();
+  if(tab === 'tasks') renderTasks();
+  if(tab === 'requests') renderRequests();
+  if(tab === 'requestEntry') renderRequests();
+}
+
+function applyRoleAccess(){
+  const role = currentSession ? currentSession.role : null;
+  const navButtons = Array.from(document.querySelectorAll('.bottom-nav button'));
+  navButtons.forEach(btn => {
+    btn.style.display = btn.dataset.roles.split(',').includes(role) ? '' : 'none';
+  });
+  const firstAllowed = navButtons.find(btn => btn.dataset.roles.split(',').includes(role));
+  if(firstAllowed) showTab(firstAllowed.dataset.tab);
+}
+
+document.querySelectorAll('.bottom-nav button').forEach(btn => {
+  btn.onclick = () => showTab(btn.dataset.tab);
+});
+
 function attemptUnlock(){
   const username = document.getElementById('usernameInput').value.trim().toLowerCase();
   const password = document.getElementById('passwordInput').value.trim();
@@ -636,6 +756,7 @@ function attemptUnlock(){
   if(user && password === user.password){
     currentSession = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
     applySession();
+    applyRoleAccess();
     hideLockScreen();
   } else {
     document.getElementById('pinError').textContent = 'Incorrect username or password, try again.';
@@ -654,10 +775,12 @@ document.getElementById('passwordInput').addEventListener('keydown', (ev) => {
 document.getElementById('lockBtn').onclick = () => {
   currentSession = null;
   applySession();
+  hideAllAppUI();
   showLockScreen();
 };
 
 lsRemove('siteLog.session');
+hideAllAppUI();
 showLockScreen();
 
 if('serviceWorker' in navigator){
@@ -722,6 +845,7 @@ function populateLevelSelect(sel){
   if(levelsList.includes(prevValue)) sel.value = prevValue;
 }
 populateLevelSelect(document.getElementById('entryLevel'));
+populateLevelSelect(document.getElementById('requestLevel'));
 
 function renderLevelsManager(){
   const container = document.getElementById('levelsManagerList');
@@ -994,16 +1118,28 @@ document.getElementById('handoverHeader').onclick = () => {
 
 let project = {};
 let entries = [];
+let tasks = [];
+let entryRequests = [];
 let currentPhotos = [];
+let currentTaskPhotos = [];
+let currentRequestPhotos = [];
 let currentAudioBlob = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let activeFilter = 'all';
 let activeStatusFilter = 'active';
+let activeTaskStatusFilter = 'active';
 let firestoreSyncStarted = false;
 let selectedEntryIds = new Set();
 let editingEntryId = null;
 let existingAudioDataUrl = null;
+
+function isManagement(){
+  return !!currentSession && ['pm', 'supervisor', 'engineer'].includes(currentSession.role);
+}
+function isLabourer(){
+  return !!currentSession && currentSession.role === 'labourer';
+}
 
 function startFirestoreSync(){
   if(firestoreSyncStarted) return;
@@ -1019,6 +1155,8 @@ function attachFirestoreListeners(retriesLeft){
   let entriesUnsub = null;
   let entryTypesUnsub = null;
   let levelsConfigUnsub = null;
+  let tasksUnsub = null;
+  let requestsUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -1028,6 +1166,8 @@ function attachFirestoreListeners(retriesLeft){
     if(entriesUnsub) entriesUnsub();
     if(entryTypesUnsub) entryTypesUnsub();
     if(levelsConfigUnsub) levelsConfigUnsub();
+    if(tasksUnsub) tasksUnsub();
+    if(requestsUnsub) requestsUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -1050,6 +1190,7 @@ function attachFirestoreListeners(retriesLeft){
         .catch((e) => console.warn('Could not seed entry types', e));
     }
     populateEntryTypeSelect();
+    populateRequestTypeSelect();
     renderEntryTypesManager();
     renderEntries();
     renderDashboard();
@@ -1066,6 +1207,7 @@ function attachFirestoreListeners(retriesLeft){
         .catch((e) => console.warn('Could not seed levels config', e));
     }
     populateLevelSelect(document.getElementById('entryLevel'));
+    populateLevelSelect(document.getElementById('requestLevel'));
     renderLevelsManager();
     renderEntries();
   }, handleSyncError);
@@ -1074,6 +1216,16 @@ function attachFirestoreListeners(retriesLeft){
     entries = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderEntries();
     renderDashboard();
+  }, handleSyncError);
+
+  tasksUnsub = db.collection('tasks').onSnapshot((snapshot) => {
+    tasks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderTasks();
+  }, handleSyncError);
+
+  requestsUnsub = db.collection('entryRequests').onSnapshot((snapshot) => {
+    entryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderRequests();
   }, handleSyncError);
 }
 
@@ -1110,10 +1262,10 @@ function renderProject(){
   document.getElementById('projectPill').textContent = project.name ? project.name : '';
 }
 
-function renderPhotoPreview(){
-  const grid = document.getElementById('photoPreview');
+function renderPhotoGrid(gridId, photosArray){
+  const grid = document.getElementById(gridId);
   grid.innerHTML = '';
-  currentPhotos.forEach((p, i) => {
+  photosArray.forEach((p, i) => {
     const div = document.createElement('div');
     div.className = 'thumb';
     div.innerHTML = `<img src="${p.preview}"><button class="remove" data-i="${i}">×</button>`;
@@ -1121,11 +1273,14 @@ function renderPhotoPreview(){
   });
   grid.querySelectorAll('.remove').forEach(btn => {
     btn.onclick = () => {
-      currentPhotos.splice(parseInt(btn.dataset.i), 1);
-      renderPhotoPreview();
+      photosArray.splice(parseInt(btn.dataset.i), 1);
+      renderPhotoGrid(gridId, photosArray);
     };
   });
 }
+function renderPhotoPreview(){ renderPhotoGrid('photoPreview', currentPhotos); }
+function renderTaskPhotoPreview(){ renderPhotoGrid('taskPhotoPreview', currentTaskPhotos); }
+function renderRequestPhotoPreview(){ renderPhotoGrid('requestPhotoPreview', currentRequestPhotos); }
 
 const DEFAULT_ENTRY_TYPES = [
   { value: 'progress', label: 'Progress Update', color: '#1d4ed8' },
@@ -1160,6 +1315,14 @@ function slugifyTypeValue(label){
 
 function populateEntryTypeSelect(){
   const sel = document.getElementById('entryType');
+  const prevValue = sel.value;
+  sel.innerHTML = entryTypesList.map(t => `<option value="${t.value}">${escapeHtml(t.label)}</option>`).join('');
+  if(entryTypesList.some(t => t.value === prevValue)) sel.value = prevValue;
+}
+
+function populateRequestTypeSelect(){
+  const sel = document.getElementById('requestType');
+  if(!sel) return;
   const prevValue = sel.value;
   sel.innerHTML = entryTypesList.map(t => `<option value="${t.value}">${escapeHtml(t.label)}</option>`).join('');
   if(entryTypesList.some(t => t.value === prevValue)) sel.value = prevValue;
@@ -1215,6 +1378,7 @@ document.getElementById('addEntryTypeBtn').onclick = async () => {
 };
 
 populateEntryTypeSelect();
+populateRequestTypeSelect();
 renderEntryTypesManager();
 
 function escapeHtml(str){
@@ -1721,23 +1885,36 @@ document.getElementById('saveProjectBtn').onclick = async () => {
   }
 };
 
-document.getElementById('photoInput').onchange = async (ev) => {
-  const files = Array.from(ev.target.files);
+async function addPhotosToArray(files, targetArray, renderFn){
   for(const f of files){
-    if(currentPhotos.length >= MAX_PHOTOS_PER_ENTRY){
-      alert(`Up to ${MAX_PHOTOS_PER_ENTRY} photos per entry — this keeps entries small enough to sync to every device.`);
+    if(targetArray.length >= MAX_PHOTOS_PER_ENTRY){
+      alert(`Up to ${MAX_PHOTOS_PER_ENTRY} photos here — this keeps things small enough to sync to every device.`);
       break;
     }
     try{
       const canvas = await fileToCanvas(f);
       const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
-      currentPhotos.push({ file: null, preview: dataUrl });
+      targetArray.push({ file: null, preview: dataUrl });
     }catch(err){
       console.warn('Could not process photo', err);
     }
   }
+  renderFn();
+}
+
+document.getElementById('photoInput').onchange = async (ev) => {
+  await addPhotosToArray(Array.from(ev.target.files), currentPhotos, renderPhotoPreview);
   ev.target.value = '';
-  renderPhotoPreview();
+};
+
+document.getElementById('taskPhotoInput').onchange = async (ev) => {
+  await addPhotosToArray(Array.from(ev.target.files), currentTaskPhotos, renderTaskPhotoPreview);
+  ev.target.value = '';
+};
+
+document.getElementById('requestPhotoInput').onchange = async (ev) => {
+  await addPhotosToArray(Array.from(ev.target.files), currentRequestPhotos, renderRequestPhotoPreview);
+  ev.target.value = '';
 };
 
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2065,16 +2242,279 @@ async function addComment(id){
 }
 window.addComment = addComment;
 
-document.querySelectorAll('.bottom-nav button').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.getElementById('logView').style.display = tab === 'log' ? 'block' : 'none';
-    document.getElementById('dashboardView').style.display = tab === 'dashboard' ? 'block' : 'none';
-    if(tab === 'dashboard') renderDashboard();
-  };
+// ---- Tasks (management assigns, everyone can respond) ----
+
+document.getElementById('taskStatusFilters').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-status]');
+  if(!btn) return;
+  activeTaskStatusFilter = btn.dataset.status;
+  document.querySelectorAll('#taskStatusFilters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTasks();
 });
+
+document.getElementById('assignTaskBtn').onclick = async () => {
+  const message = document.getElementById('taskMessage').value.trim();
+  const photos = currentTaskPhotos.map(p => p.preview);
+  if(!message && photos.length === 0){
+    alert('Add a message or a photo before sending the task.');
+    return;
+  }
+  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0);
+  if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
+    alert('These photos are too large to sync. Please remove one and try again.');
+    return;
+  }
+  const btn = document.getElementById('assignTaskBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try{
+    await db.collection('tasks').add({
+      message,
+      photos,
+      assignedByName: currentSession.name,
+      assignedByRole: currentSession.roleLabel,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      completed: false,
+      comments: []
+    });
+    document.getElementById('taskMessage').value = '';
+    currentTaskPhotos = [];
+    renderTaskPhotoPreview();
+  }catch(err){
+    alert('Failed to send task: ' + err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Send Task';
+  }
+};
+
+function renderTasks(){
+  const assignCard = document.getElementById('assignTaskCard');
+  if(assignCard) assignCard.style.display = isManagement() ? 'block' : 'none';
+
+  const list = document.getElementById('tasksList');
+  if(!list) return;
+  const filtered = tasks.filter(t => activeTaskStatusFilter === 'completed' ? t.completed === true : t.completed !== true);
+  const sorted = [...filtered].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
+
+  if(sorted.length === 0){
+    list.innerHTML = `<div class="empty">${activeTaskStatusFilter === 'completed' ? 'No completed tasks yet.' : 'No tasks yet.'}</div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(t => {
+    const dt = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
+    const dtStr = dt ? dt.toLocaleString() : 'Just now';
+    const photosHtml = (t.photos && t.photos.length)
+      ? `<div class="entry-photos">${t.photos.map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('')}</div>`
+      : '';
+    const commentsHtml = (t.comments && t.comments.length)
+      ? t.comments.map(c => `
+          <div class="comment-item">
+            <div><strong>${escapeHtml(c.author || '')}</strong>${c.role ? ' · ' + escapeHtml(c.role) : ''}</div>
+            ${c.text ? `<div>${escapeHtml(c.text)}</div>` : ''}
+            ${c.photo ? `<img src="${c.photo}" style="width:70px; height:70px; object-fit:cover; border-radius:6px; margin-top:4px; cursor:pointer;" onclick="window.open(this.src)">` : ''}
+            <div class="comment-meta">${isNaN(new Date(c.dateTime)) ? c.dateTime : new Date(c.dateTime).toLocaleString()}</div>
+          </div>
+        `).join('')
+      : '<div class="empty" style="padding:6px 0;">No responses yet.</div>';
+
+    return `
+      <div class="entry-item">
+        <div class="entry-detail open">
+          <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
+          <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
+          ${photosHtml}
+          <div class="entry-actions">
+            <button type="button" class="secondary small" onclick="toggleTaskComplete('${t.id}', ${t.completed ? 'false' : 'true'})">${t.completed ? '↩️ Reopen' : '✅ Mark Complete'}</button>
+          </div>
+          <div class="section-label" style="margin-top:14px;">Responses</div>
+          <div class="comments-list">${commentsHtml}</div>
+          <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" class="comment-input" id="taskCommentInput-${t.id}" placeholder="Add a response...">
+            <button type="button" class="secondary small" onclick="sendTaskResponse('${t.id}')">Send</button>
+            <label class="secondary small" style="cursor:pointer; display:inline-flex; align-items:center;">📷<input type="file" accept="image/*" capture="environment" style="display:none;" onchange="attachTaskResponsePhoto('${t.id}', this)"></label>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function tsOf(ts){
+  return (ts && ts.toDate) ? ts.toDate().getTime() : 0;
+}
+
+async function toggleTaskComplete(id, makeComplete){
+  try{
+    await db.collection('tasks').doc(id).update({ completed: makeComplete });
+  }catch(err){
+    alert('Failed to update task status: ' + err.message);
+  }
+}
+window.toggleTaskComplete = toggleTaskComplete;
+
+async function sendTaskResponse(id, photoDataUrl){
+  const input = document.getElementById('taskCommentInput-' + id);
+  const text = input ? input.value.trim() : '';
+  if(!text && !photoDataUrl) return;
+  try{
+    const comment = {
+      text,
+      photo: photoDataUrl || null,
+      author: currentSession ? currentSession.name : '',
+      role: currentSession ? currentSession.roleLabel : '',
+      dateTime: new Date().toISOString()
+    };
+    await db.collection('tasks').doc(id).update({
+      comments: firebase.firestore.FieldValue.arrayUnion(comment)
+    });
+    if(input) input.value = '';
+  }catch(err){
+    alert('Failed to send response: ' + err.message);
+  }
+}
+window.sendTaskResponse = sendTaskResponse;
+
+async function attachTaskResponsePhoto(id, inputEl){
+  const file = inputEl.files[0];
+  inputEl.value = '';
+  if(!file) return;
+  try{
+    const canvas = await fileToCanvas(file);
+    const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
+    await sendTaskResponse(id, dataUrl);
+  }catch(err){
+    alert('Could not attach that photo: ' + err.message);
+  }
+}
+window.attachTaskResponsePhoto = attachTaskResponsePhoto;
+
+// ---- Entry Requests (labourers request, management actions) ----
+
+document.getElementById('submitRequestBtn').onclick = async () => {
+  const type = document.getElementById('requestType').value;
+  const level = document.getElementById('requestLevel').value.trim();
+  const area = document.getElementById('requestArea').value.trim();
+  const notes = document.getElementById('requestNotes').value.trim();
+  const photos = currentRequestPhotos.map(p => p.preview);
+
+  if(!notes && photos.length === 0){
+    alert('Add a description or a photo before sending the request.');
+    return;
+  }
+  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0);
+  if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
+    alert('These photos are too large to sync. Please remove one and try again.');
+    return;
+  }
+
+  const btn = document.getElementById('submitRequestBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try{
+    await db.collection('entryRequests').add({
+      type, level, area, notes, photos,
+      submittedByName: currentSession.name,
+      submittedByRole: currentSession.roleLabel,
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      status: 'pending'
+    });
+    document.getElementById('requestNotes').value = '';
+    document.getElementById('requestArea').value = '';
+    currentRequestPhotos = [];
+    renderRequestPhotoPreview();
+  }catch(err){
+    alert('Failed to send request: ' + err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Send Request';
+  }
+};
+
+function requestStatusBadge(status){
+  const label = status === 'accepted' ? 'Accepted' : status === 'dismissed' ? 'Dismissed' : 'Pending';
+  return `<span class="status-badge ${status}">${label}</span>`;
+}
+
+function renderRequestCard(r, showActions){
+  const dt = r.submittedAt && r.submittedAt.toDate ? r.submittedAt.toDate() : null;
+  const dtStr = dt ? dt.toLocaleString() : 'Just now';
+  const photosHtml = (r.photos && r.photos.length)
+    ? `<div class="entry-photos">${r.photos.map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('')}</div>`
+    : '';
+  const locationBits = [];
+  if(r.level) locationBits.push('Level: ' + escapeHtml(r.level));
+  if(r.area) locationBits.push('Area: ' + escapeHtml(r.area));
+  const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
+  const actionsHtml = (showActions && r.status === 'pending')
+    ? `<div class="entry-actions">
+        <button type="button" class="secondary small" onclick="useRequestForEntry('${r.id}')">✅ Create Log Entry</button>
+        <button type="button" class="danger small" onclick="dismissRequest('${r.id}')">Dismiss</button>
+      </div>`
+    : '';
+  return `
+    <div class="entry-item">
+      <div class="entry-detail open">
+        <div class="entry-tags"><span class="type-tag type-${r.type}">${typeLabel(r.type)}</span> &nbsp;${dtStr} ${requestStatusBadge(r.status)}</div>
+        ${locationHtml}
+        <div class="entry-body">${r.notes ? escapeHtml(r.notes) : '<em>No description</em>'}</div>
+        ${photosHtml}
+        ${actionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderRequests(){
+  const sorted = [...entryRequests].sort((a, b) => tsOf(b.submittedAt) - tsOf(a.submittedAt));
+
+  const list = document.getElementById('requestsList');
+  if(list){
+    list.innerHTML = sorted.length
+      ? sorted.map(r => renderRequestCard(r, true)).join('')
+      : '<div class="empty">No requests yet.</div>';
+  }
+
+  const myList = document.getElementById('myRequestsList');
+  if(myList){
+    myList.innerHTML = sorted.length
+      ? sorted.map(r => renderRequestCard(r, false)).join('')
+      : '<div class="empty">You haven\'t sent any requests yet.</div>';
+  }
+}
+
+async function useRequestForEntry(id){
+  const r = entryRequests.find(x => x.id === id);
+  if(!r) return;
+  try{
+    await db.collection('entryRequests').doc(id).update({ status: 'accepted' });
+  }catch(err){
+    alert('Failed to update request: ' + err.message);
+    return;
+  }
+  resetEntryForm();
+  document.getElementById('entryType').value = r.type || 'progress';
+  document.getElementById('entryLevel').value = r.level || '';
+  document.getElementById('entryLevel').dispatchEvent(new Event('change'));
+  document.getElementById('entryArea').value = r.area || '';
+  document.getElementById('entryNotes').value = r.notes || '';
+  currentPhotos = (r.photos || []).map(p => ({ file: null, preview: p }));
+  renderPhotoPreview();
+  showTab('log');
+  document.getElementById('entryNotes').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.useRequestForEntry = useRequestForEntry;
+
+async function dismissRequest(id){
+  try{
+    await db.collection('entryRequests').doc(id).update({ status: 'dismissed' });
+  }catch(err){
+    alert('Failed to dismiss request: ' + err.message);
+  }
+}
+window.dismissRequest = dismissRequest;
 
 function renderDashboard(){
   const weekEndingInput = document.getElementById('weekEnding');
