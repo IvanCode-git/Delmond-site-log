@@ -274,6 +274,7 @@
   <div class="header-actions">
     <div id="projectPill"></div>
     <div id="sessionPill" class="session-pill"></div>
+    <button id="notifyBtn" class="small" style="display:none;">🔔 Enable Notifications</button>
     <button id="lockBtn" class="small">🔓 Log Out</button>
   </div>
 </header>
@@ -611,6 +612,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 
@@ -626,6 +628,17 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+const VAPID_PUBLIC_KEY = 'VAPID_PUBLIC_KEY_PLACEHOLDER';
+const NOTIFY_WORKER_URL = 'NOTIFY_WORKER_URL_PLACEHOLDER';
+let messaging = null;
+try{
+  if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
+    messaging = firebase.messaging();
+  }
+}catch(e){
+  console.warn('Push messaging not supported in this browser', e);
+}
 
 if(window.pdfjsLib){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -714,6 +727,87 @@ function applySession(){
     : '';
 }
 
+function updateNotifyButton(){
+  const btn = document.getElementById('notifyBtn');
+  if(!currentSession || !messaging){
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  if(Notification.permission === 'granted'){
+    btn.textContent = '🔔 Notifications On';
+    btn.disabled = true;
+  } else if(Notification.permission === 'denied'){
+    btn.textContent = '🔕 Notifications Blocked';
+    btn.disabled = true;
+  } else {
+    btn.textContent = '🔔 Enable Notifications';
+    btn.disabled = false;
+  }
+}
+
+async function registerPushToken(){
+  if(!messaging || Notification.permission !== 'granted' || !currentSession) return;
+  try{
+    const registration = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: registration });
+    if(!token) return;
+    await db.collection('pushTokens').doc(token).set({
+      token,
+      role: currentSession.role,
+      username: currentSession.username,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(err){
+    console.warn('Could not register push token', err);
+  }
+}
+
+async function enablePushNotifications(){
+  if(!messaging){
+    alert('Push notifications are not supported in this browser.');
+    return;
+  }
+  try{
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      updateNotifyButton();
+      return;
+    }
+    await registerPushToken();
+  }catch(err){
+    alert('Failed to enable notifications: ' + err.message);
+  }
+  updateNotifyButton();
+}
+document.getElementById('notifyBtn').onclick = enablePushNotifications;
+
+if(messaging){
+  messaging.onMessage((payload) => {
+    const title = (payload.notification && payload.notification.title) || 'Delmond Site Log';
+    const body = (payload.notification && payload.notification.body) || '';
+    if(Notification.permission === 'granted'){
+      new Notification(title, { body, icon: 'icons/icon-192.png' });
+    }
+  });
+}
+
+async function sendPushNotification(targetRoles, title, body){
+  if(!NOTIFY_WORKER_URL || NOTIFY_WORKER_URL === 'NOTIFY_WORKER_URL_PLACEHOLDER') return;
+  try{
+    const snapshot = await db.collection('pushTokens').where('role', 'in', targetRoles).get();
+    const tokens = snapshot.docs.map(d => d.id);
+    if(tokens.length === 0) return;
+    await fetch(NOTIFY_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens, title, body })
+    });
+  }catch(err){
+    console.warn('Could not send push notification', err);
+  }
+}
+
 const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView' };
 
 function hideAllAppUI(){
@@ -757,6 +851,8 @@ function attemptUnlock(){
     currentSession = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
     applySession();
     applyRoleAccess();
+    updateNotifyButton();
+    registerPushToken();
     hideLockScreen();
   } else {
     document.getElementById('pinError').textContent = 'Incorrect username or password, try again.';
@@ -775,6 +871,7 @@ document.getElementById('passwordInput').addEventListener('keydown', (ev) => {
 document.getElementById('lockBtn').onclick = () => {
   currentSession = null;
   applySession();
+  updateNotifyButton();
   hideAllAppUI();
   showLockScreen();
 };
@@ -2281,6 +2378,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     document.getElementById('taskMessage').value = '';
     currentTaskPhotos = [];
     renderTaskPhotoPreview();
+    sendPushNotification(['labourer'], `New task from ${currentSession.name}`, message.slice(0, 120) || 'Open the app to see details');
   }catch(err){
     alert('Failed to send task: ' + err.message);
   }finally{
@@ -2371,6 +2469,8 @@ async function sendTaskResponse(id, photoDataUrl){
       comments: firebase.firestore.FieldValue.arrayUnion(comment)
     });
     if(input) input.value = '';
+    const targetRoles = isLabourer() ? ['pm', 'supervisor', 'engineer'] : ['labourer'];
+    sendPushNotification(targetRoles, `${currentSession.name} responded to a task`, text || '📷 Photo attached');
   }catch(err){
     alert('Failed to send response: ' + err.message);
   }
@@ -2425,6 +2525,7 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     document.getElementById('requestArea').value = '';
     currentRequestPhotos = [];
     renderRequestPhotoPreview();
+    sendPushNotification(['pm', 'supervisor', 'engineer'], `New entry request from ${currentSession.name}`, notes.slice(0, 120) || 'Open the app to see details');
   }catch(err){
     alert('Failed to send request: ' + err.message);
   }finally{
@@ -2490,6 +2591,7 @@ async function useRequestForEntry(id){
   if(!r) return;
   try{
     await db.collection('entryRequests').doc(id).update({ status: 'accepted' });
+    sendPushNotification(['labourer'], 'Your request was accepted', `${currentSession.name} is turning it into a log entry.`);
   }catch(err){
     alert('Failed to update request: ' + err.message);
     return;
@@ -2510,6 +2612,7 @@ window.useRequestForEntry = useRequestForEntry;
 async function dismissRequest(id){
   try{
     await db.collection('entryRequests').doc(id).update({ status: 'dismissed' });
+    sendPushNotification(['labourer'], 'Your request was dismissed', `${currentSession.name} reviewed it but didn't create a log entry.`);
   }catch(err){
     alert('Failed to dismiss request: ' + err.message);
   }
