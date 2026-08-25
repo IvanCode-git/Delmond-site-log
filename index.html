@@ -551,6 +551,14 @@
     <div class="card" id="assignTaskCard">
       <h2>Assign a Task</h2>
       <div class="field">
+        <label>Send To</label>
+        <select id="taskTargetRole">
+          <option value="labourer">Labourers</option>
+          <option value="fixers">Fixers</option>
+          <option value="jointers">Jointers</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Message</label>
         <textarea id="taskMessage" placeholder="e.g. Clear debris from Level 3 stairwell before Friday"></textarea>
       </div>
@@ -621,6 +629,40 @@
 
   </div>
 
+  <div id="workingLocationsView" style="display:none;">
+
+    <div class="card" id="submitLocationCard">
+      <h2>Working Locations</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Let the team know where you're working right now.</p>
+      <div class="field">
+        <label>Level</label>
+        <select id="locationLevel"></select>
+      </div>
+      <div id="locationPlanWrap" style="display:none;">
+        <div class="field" style="border-bottom:none;">
+          <label>Area (tap the plan to drop a pin)</label>
+          <div class="plan-box" id="locationPlanBox">
+            <div class="plan-label" id="locationPlanLabel"></div>
+            <img class="plan-image" id="locationPlanImage" alt="">
+            <div class="plan-marker" id="locationPlanMarker"></div>
+          </div>
+          <div class="plan-readout">
+            <span id="locationPlanReadout">Tap the plan above to drop a pin.</span>
+            <button type="button" id="clearLocationMarkerBtn" class="secondary small">Clear Pin</button>
+          </div>
+        </div>
+      </div>
+      <button type="button" id="submitLocationBtn" style="margin-top:12px;">📍 I'm Working Here</button>
+    </div>
+
+    <div class="card">
+      <h2>On Site Now</h2>
+      <div id="workingLocationsSummary" class="stat-grid" style="margin-bottom:14px;"></div>
+      <div id="workingLocationsList"></div>
+    </div>
+
+  </div>
+
   <div id="messagesView" style="display:none;">
 
     <div class="card" id="messagesContactsCard">
@@ -648,11 +690,12 @@
 
 <nav class="bottom-nav">
   <button data-tab="log" data-roles="pm,supervisor,engineer" class="active"><span class="nav-icon">📋</span>Log</button>
-  <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer"><span class="nav-icon">✅</span>Tasks</button>
+  <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">✅</span>Tasks</button>
   <button data-tab="requests" data-roles="pm,supervisor,engineer"><span class="nav-icon">📥</span>Requests</button>
   <button data-tab="dashboard" data-roles="pm,supervisor,engineer"><span class="nav-icon">📊</span>Dashboard</button>
-  <button data-tab="requestEntry" data-roles="labourer"><span class="nav-icon">✍️</span>Request Entry</button>
-  <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer"><span class="nav-icon">💬</span>Messages<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
+  <button data-tab="requestEntry" data-roles="labourer,fixers,jointers"><span class="nav-icon">✍️</span>Request Entry</button>
+  <button data-tab="workingLocations" data-roles="pm,supervisor,engineer,fixers,jointers"><span class="nav-icon">📍</span>Locations</button>
+  <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">💬</span>Messages<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -676,7 +719,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT4222lFHjzkkpq_sCf_gvrv_wU16BlQ5pE';
-const NOTIFY_WORKER_URL = 'NOTIFY_WORKER_URL_PLACEHOLDER';
+const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
 let messaging = null;
 try{
   if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
@@ -752,7 +795,9 @@ const USERS = {
   val: { password: '800911', role: 'pm', name: 'Val', roleLabel: 'Project Manager' },
   deniz: { password: '2929', role: 'supervisor', name: 'Deniz', roleLabel: 'Supervisor' },
   lab: { password: '1919', role: 'labourer', name: 'Labourer', roleLabel: 'Labourer' },
-  ivan: { password: '2007', role: 'engineer', name: 'Ivan', roleLabel: 'Software Engineer' }
+  ivan: { password: '2007', role: 'engineer', name: 'Ivan', roleLabel: 'Software Engineer' },
+  jointers: { password: '1234', role: 'jointers', name: 'Jointers', roleLabel: 'Jointers' },
+  fixers: { password: '4321', role: 'fixers', name: 'Fixers', roleLabel: 'Fixers' }
 };
 let currentSession = null;
 
@@ -882,7 +927,7 @@ async function sendPushNotificationToUser(username, title, body){
   }
 }
 
-const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', messages: 'messagesView' };
+const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', workingLocations: 'workingLocationsView', messages: 'messagesView' };
 
 function hideAllAppUI(){
   Object.values(VIEW_IDS).forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -902,6 +947,7 @@ function showTab(tab){
   if(tab === 'requests') renderRequests();
   if(tab === 'requestEntry') renderRequests();
   if(tab === 'messages') resetMessagesView();
+  if(tab === 'workingLocations') renderWorkingLocations();
 }
 
 function applyRoleAccess(){
@@ -1020,6 +1066,7 @@ function populateLevelSelect(sel){
 }
 populateLevelSelect(document.getElementById('entryLevel'));
 populateLevelSelect(document.getElementById('requestLevel'));
+populateLevelSelect(document.getElementById('locationLevel'));
 
 function renderLevelsManager(){
   const container = document.getElementById('levelsManagerList');
@@ -1275,6 +1322,67 @@ document.getElementById('planBox').addEventListener('click', (ev) => {
 
 document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
 
+let currentLocationMarker = null;
+
+function updateLocationPlanLabel(level){
+  document.getElementById('locationPlanLabel').textContent = level
+    ? `Placeholder plan — ${level} (awaiting site drawing)`
+    : 'Placeholder plan';
+}
+
+function loadLocationLevelPlan(level){
+  const planBox = document.getElementById('locationPlanBox');
+  const planImage = document.getElementById('locationPlanImage');
+  const planLabel = document.getElementById('locationPlanLabel');
+  const planSrc = getPlanForLevel(level);
+
+  if(planSrc){
+    planImage.onload = () => {
+      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
+    };
+    planImage.src = planSrc;
+    planImage.style.display = 'block';
+    planLabel.style.display = 'none';
+  } else {
+    planImage.style.display = 'none';
+    planImage.src = '';
+    planBox.style.aspectRatio = '4 / 3';
+    planLabel.style.display = 'flex';
+    updateLocationPlanLabel(level);
+  }
+}
+
+function clearLocationMarker(){
+  currentLocationMarker = null;
+  document.getElementById('locationPlanMarker').style.display = 'none';
+  document.getElementById('locationPlanReadout').textContent = 'Tap the plan above to drop a pin.';
+}
+
+function setLocationMarker(xPct, yPct){
+  currentLocationMarker = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
+  const marker = document.getElementById('locationPlanMarker');
+  marker.style.left = currentLocationMarker.x + '%';
+  marker.style.top = currentLocationMarker.y + '%';
+  marker.style.display = 'block';
+  document.getElementById('locationPlanReadout').textContent = `Pin at ${currentLocationMarker.x}%, ${currentLocationMarker.y}%`;
+}
+
+document.getElementById('locationLevel').addEventListener('change', (ev) => {
+  const level = ev.target.value;
+  document.getElementById('locationPlanWrap').style.display = level ? 'block' : 'none';
+  loadLocationLevelPlan(level);
+  clearLocationMarker();
+});
+
+document.getElementById('locationPlanBox').addEventListener('click', (ev) => {
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
+  const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
+  setLocationMarker(xPct, yPct);
+});
+
+document.getElementById('clearLocationMarkerBtn').onclick = clearLocationMarker;
+
 function setCollapsible(headerId, bodyId, open){
   document.getElementById(headerId).classList.toggle('open', open);
   document.getElementById(bodyId).classList.toggle('open', open);
@@ -1296,6 +1404,7 @@ let tasks = [];
 let entryRequests = [];
 let messages = [];
 let activeConversationUsername = null;
+let workingLocations = [];
 let currentPhotos = [];
 let currentTaskPhotos = [];
 let currentRequestPhotos = [];
@@ -1316,6 +1425,9 @@ function isManagement(){
 function isLabourer(){
   return !!currentSession && currentSession.role === 'labourer';
 }
+function isFieldTrade(){
+  return !!currentSession && ['fixers', 'jointers'].includes(currentSession.role);
+}
 
 function startFirestoreSync(){
   if(firestoreSyncStarted) return;
@@ -1334,6 +1446,7 @@ function attachFirestoreListeners(retriesLeft){
   let tasksUnsub = null;
   let requestsUnsub = null;
   let messagesUnsub = null;
+  let workingLocationsUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -1346,6 +1459,7 @@ function attachFirestoreListeners(retriesLeft){
     if(tasksUnsub) tasksUnsub();
     if(requestsUnsub) requestsUnsub();
     if(messagesUnsub) messagesUnsub();
+    if(workingLocationsUnsub) workingLocationsUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -1386,6 +1500,7 @@ function attachFirestoreListeners(retriesLeft){
     }
     populateLevelSelect(document.getElementById('entryLevel'));
     populateLevelSelect(document.getElementById('requestLevel'));
+    populateLevelSelect(document.getElementById('locationLevel'));
     renderLevelsManager();
     renderEntries();
   }, handleSyncError);
@@ -1409,6 +1524,11 @@ function attachFirestoreListeners(retriesLeft){
   messagesUnsub = db.collection('messages').onSnapshot((snapshot) => {
     messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderMessages();
+  }, handleSyncError);
+
+  workingLocationsUnsub = db.collection('workingLocations').onSnapshot((snapshot) => {
+    workingLocations = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderWorkingLocations();
   }, handleSyncError);
 }
 
@@ -2436,7 +2556,10 @@ document.getElementById('taskStatusFilters').addEventListener('click', (ev) => {
   renderTasks();
 });
 
+const TARGET_ROLE_LABELS = { labourer: 'Labourers', fixers: 'Fixers', jointers: 'Jointers' };
+
 document.getElementById('assignTaskBtn').onclick = async () => {
+  const targetRole = document.getElementById('taskTargetRole').value;
   const message = document.getElementById('taskMessage').value.trim();
   const photos = currentTaskPhotos.map(p => p.preview);
   if(!message && photos.length === 0){
@@ -2455,6 +2578,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     await db.collection('tasks').add({
       message,
       photos,
+      targetRole,
       assignedByName: currentSession.name,
       assignedByRole: currentSession.roleLabel,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2464,7 +2588,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     document.getElementById('taskMessage').value = '';
     currentTaskPhotos = [];
     renderTaskPhotoPreview();
-    sendPushNotification(['labourer'], `New task from ${currentSession.name}`, message.slice(0, 120) || 'Open the app to see details');
+    sendPushNotification([targetRole], `New task from ${currentSession.name}`, message.slice(0, 120) || 'Open the app to see details');
   }catch(err){
     alert('Failed to send task: ' + err.message);
   }finally{
@@ -2479,7 +2603,8 @@ function renderTasks(){
 
   const list = document.getElementById('tasksList');
   if(!list) return;
-  const filtered = tasks.filter(t => activeTaskStatusFilter === 'completed' ? t.completed === true : t.completed !== true);
+  const myTasks = isManagement() ? tasks : (currentSession ? tasks.filter(t => (t.targetRole || 'labourer') === currentSession.role) : []);
+  const filtered = myTasks.filter(t => activeTaskStatusFilter === 'completed' ? t.completed === true : t.completed !== true);
   const sorted = [...filtered].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
 
   if(sorted.length === 0){
@@ -2507,7 +2632,7 @@ function renderTasks(){
     return `
       <div class="entry-item">
         <div class="entry-detail open">
-          <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
+          <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) → ${escapeHtml(TARGET_ROLE_LABELS[t.targetRole || 'labourer'])} &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
           <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
           ${photosHtml}
           <div class="entry-actions">
@@ -2555,7 +2680,8 @@ async function sendTaskResponse(id, photoDataUrl){
       comments: firebase.firestore.FieldValue.arrayUnion(comment)
     });
     if(input) input.value = '';
-    const targetRoles = isLabourer() ? ['pm', 'supervisor', 'engineer'] : ['labourer'];
+    const task = tasks.find(x => x.id === id);
+    const targetRoles = isManagement() ? [(task && task.targetRole) || 'labourer'] : ['pm', 'supervisor', 'engineer'];
     sendPushNotification(targetRoles, `${currentSession.name} responded to a task`, text || '📷 Photo attached');
   }catch(err){
     alert('Failed to send response: ' + err.message);
@@ -2843,6 +2969,126 @@ document.getElementById('sendMessageBtn').onclick = async () => {
 document.getElementById('messageInput').addEventListener('keydown', (ev) => {
   if(ev.key === 'Enter') document.getElementById('sendMessageBtn').click();
 });
+
+// ---- Working Locations (Fixers/Jointers check in, management sees the board) ----
+
+document.getElementById('submitLocationBtn').onclick = async () => {
+  const level = document.getElementById('locationLevel').value;
+  if(!level){
+    alert('Select a level first.');
+    return;
+  }
+  const btn = document.getElementById('submitLocationBtn');
+  btn.disabled = true;
+  try{
+    await db.collection('workingLocations').add({
+      trade: currentSession.role,
+      tradeLabel: currentSession.roleLabel,
+      level,
+      areaMarker: currentLocationMarker,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.roleLabel} checked in`, `Working at ${level}`);
+    document.getElementById('locationLevel').value = '';
+    document.getElementById('locationPlanWrap').style.display = 'none';
+    clearLocationMarker();
+  }catch(err){
+    alert('Failed to save your location: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+function renderWorkingLocations(){
+  const submitCard = document.getElementById('submitLocationCard');
+  if(submitCard) submitCard.style.display = isFieldTrade() ? 'block' : 'none';
+
+  const summary = document.getElementById('workingLocationsSummary');
+  if(summary){
+    const fixersCount = workingLocations.filter(l => l.trade === 'fixers').length;
+    const jointersCount = workingLocations.filter(l => l.trade === 'jointers').length;
+    summary.innerHTML = `
+      <div class="stat-tile"><div class="label">Fixers on site</div><div class="value">${fixersCount}</div></div>
+      <div class="stat-tile"><div class="label">Jointers on site</div><div class="value">${jointersCount}</div></div>
+    `;
+  }
+
+  const list = document.getElementById('workingLocationsList');
+  if(!list) return;
+  const sorted = [...workingLocations].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
+  if(sorted.length === 0){
+    list.innerHTML = '<div class="empty">No one is currently checked in.</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(loc => {
+    const time = (loc.createdAt && loc.createdAt.toDate) ? loc.createdAt.toDate().toLocaleString() : 'Just now';
+    const miniPlanSrc = getPlanForLevel(loc.level);
+    const miniStyle = miniPlanSrc ? `background-image:url('${miniPlanSrc}'); background-size:cover; background-position:center;` : '';
+    const markerHtml = loc.areaMarker ? `
+      <div class="plan-readout" style="margin-top:6px;">
+        <div class="plan-mini" style="${miniStyle}">
+          <div class="plan-marker" style="display:block; left:${loc.areaMarker.x}%; top:${loc.areaMarker.y}%;"></div>
+        </div>
+        <span>📍 Pin at ${loc.areaMarker.x}%, ${loc.areaMarker.y}% on ${escapeHtml(loc.level)} plan</span>
+      </div>
+    ` : '';
+    const canFinish = currentSession && currentSession.role === loc.trade;
+    const canSendPdf = isManagement();
+    const actionsHtml = (canFinish || canSendPdf) ? `
+      <div class="entry-actions">
+        ${canFinish ? `<button type="button" class="secondary small" onclick="finishLocation('${loc.id}')">✅ Finished Here</button>` : ''}
+        ${canSendPdf ? `<label class="secondary small" style="cursor:pointer; display:inline-flex; align-items:center;">📄 Send PDF<input type="file" accept="application/pdf,.pdf" style="display:none;" onchange="sendPdfToLocation('${loc.id}', this)"></label>` : ''}
+      </div>
+    ` : '';
+
+    return `
+      <div class="entry-item">
+        <div class="entry-detail open">
+          <div class="entry-tags"><span class="type-tag" style="background:#e0e7ff; color:#1d4ed8;">${escapeHtml(loc.tradeLabel)}</span> &nbsp;Level: ${escapeHtml(loc.level)} &nbsp;${time}</div>
+          ${markerHtml}
+          ${actionsHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function finishLocation(id){
+  try{
+    await db.collection('workingLocations').doc(id).delete();
+  }catch(err){
+    alert('Failed to clear that check-in: ' + err.message);
+  }
+}
+window.finishLocation = finishLocation;
+
+async function sendPdfToLocation(locationId, inputEl){
+  const file = inputEl.files[0];
+  inputEl.value = '';
+  if(!file) return;
+  const loc = workingLocations.find(l => l.id === locationId);
+  if(!loc) return;
+  try{
+    const canvas = await renderPdfFirstPageToCanvas(file);
+    const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
+    await db.collection('tasks').add({
+      message: `Drawing/document for ${loc.level}`,
+      photos: [dataUrl],
+      targetRole: loc.trade,
+      assignedByName: currentSession.name,
+      assignedByRole: currentSession.roleLabel,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      completed: false,
+      comments: []
+    });
+    sendPushNotification([loc.trade], `PDF from ${currentSession.name}`, `Drawing/document for ${loc.level} — check Tasks.`);
+    alert('Sent — they\'ll find it under Tasks. Note: only the first page of the PDF is sent.');
+  }catch(err){
+    alert('Could not send that PDF: ' + err.message);
+  }
+}
+window.sendPdfToLocation = sendPdfToLocation;
 
 function renderDashboard(){
   const weekEndingInput = document.getElementById('weekEnding');
