@@ -206,6 +206,19 @@
 
   .entry-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
   .email-panel{margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
+  .comment-item{padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .comment-item:last-child{border-bottom:none;}
+  .comment-meta{font-size:11px; color:var(--muted); margin-top:2px;}
+  .completed-badge{
+    display:inline-block; background:#dcfce7; color:var(--ok); font-size:10px; font-weight:800;
+    text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-left:6px; letter-spacing:.03em;
+  }
+  .comment-input{
+    flex:1; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:14px;
+  }
+  .status-toggle{display:flex; gap:6px; margin-bottom:10px;}
+  .status-toggle button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:600;}
+  .status-toggle button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -393,6 +406,10 @@
 
     <div class="card">
       <h2>Log Entries</h2>
+      <div class="status-toggle" id="statusFilters">
+        <button data-status="active" class="active">Active</button>
+        <button data-status="completed">✅ Completed</button>
+      </div>
       <div class="filters" id="filters">
         <button data-filter="all" class="active">All</button>
         <button data-filter="progress">Progress</button>
@@ -690,6 +707,7 @@ let currentAudioBlob = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let activeFilter = 'all';
+let activeStatusFilter = 'active';
 let firestoreSyncStarted = false;
 let selectedEntryIds = new Set();
 let editingEntryId = null;
@@ -796,11 +814,12 @@ function escapeHtml(str){
 
 function renderEntries(){
   const list = document.getElementById('entriesList');
-  const filtered = activeFilter === 'all' ? entries : entries.filter(e => e.type === activeFilter);
+  const statusFiltered = entries.filter(e => activeStatusFilter === 'completed' ? e.completed === true : e.completed !== true);
+  const filtered = activeFilter === 'all' ? statusFiltered : statusFiltered.filter(e => e.type === activeFilter);
   const sorted = [...filtered].sort((a,b) => new Date(b.dateTime) - new Date(a.dateTime));
 
   if(sorted.length === 0){
-    list.innerHTML = '<div class="empty">No entries yet.</div>';
+    list.innerHTML = `<div class="empty">${activeStatusFilter === 'completed' ? 'No completed entries yet.' : 'No entries yet.'}</div>`;
     return;
   }
 
@@ -863,7 +882,7 @@ function renderEntries(){
           <input type="checkbox" class="entry-select" data-id="${e.id}" ${selectedEntryIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleEntrySelection('${e.id}', this.checked)">
           <span class="status-dot" style="background:${TYPE_COLORS[e.type] || '#6b7280'};"></span>
           <div class="entry-row-main">
-            <div class="entry-row-title">${escapeHtml(title)}</div>
+            <div class="entry-row-title">${escapeHtml(title)}${e.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
             <div class="entry-row-sub">${escapeHtml(subtitle)}</div>
           </div>
           <div class="entry-row-date">${dtDateStr}</div>
@@ -883,7 +902,24 @@ function renderEntries(){
             <button type="button" class="secondary small" onclick="startEditEntry('${e.id}')">✏️ Edit</button>
             <button type="button" class="secondary small" onclick="downloadEntryPdf('${e.id}')">📄 PDF</button>
             <button type="button" class="secondary small" onclick="toggleEmailPanel('${e.id}')">✉️ Email</button>
+            <button type="button" class="secondary small" onclick="toggleComplete('${e.id}', ${e.completed ? 'false' : 'true'})">${e.completed ? '↩️ Reopen' : '✅ Mark Complete'}</button>
             <button type="button" class="danger small" onclick="deleteEntry('${e.id}')">Delete</button>
+          </div>
+
+          <div class="section-label" style="margin-top:14px;">Comments</div>
+          <div class="comments-list">
+            ${(e.comments && e.comments.length)
+              ? e.comments.map(c => `
+                  <div class="comment-item">
+                    <div>${escapeHtml(c.text)}</div>
+                    <div class="comment-meta">${isNaN(new Date(c.dateTime)) ? c.dateTime : new Date(c.dateTime).toLocaleString()}</div>
+                  </div>
+                `).join('')
+              : '<div class="empty" style="padding:6px 0;">No comments yet.</div>'}
+          </div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <input type="text" class="comment-input" id="commentInput-${e.id}" placeholder="Add a comment...">
+            <button type="button" class="secondary small" onclick="addComment('${e.id}')">Add</button>
           </div>
           <div class="email-panel" id="email-${e.id}" style="display:none;">
             <div class="field">
@@ -1532,6 +1568,8 @@ document.getElementById('addEntryBtn').onclick = async () => {
     if(wasEditing){
       await db.collection('entries').doc(entryId).update(entryData);
     } else {
+      entryData.completed = false;
+      entryData.comments = [];
       entryData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('entries').doc(entryId).set(entryData);
     }
@@ -1563,6 +1601,39 @@ document.getElementById('filters').addEventListener('click', (ev) => {
   btn.classList.add('active');
   renderEntries();
 });
+
+document.getElementById('statusFilters').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-status]');
+  if(!btn) return;
+  activeStatusFilter = btn.dataset.status;
+  document.querySelectorAll('#statusFilters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEntries();
+});
+
+async function toggleComplete(id, makeComplete){
+  try{
+    await db.collection('entries').doc(id).update({ completed: makeComplete });
+  }catch(err){
+    alert('Failed to update status: ' + err.message);
+  }
+}
+window.toggleComplete = toggleComplete;
+
+async function addComment(id){
+  const input = document.getElementById('commentInput-' + id);
+  const text = input.value.trim();
+  if(!text) return;
+  try{
+    await db.collection('entries').doc(id).update({
+      comments: firebase.firestore.FieldValue.arrayUnion({ text, dateTime: new Date().toISOString() })
+    });
+    input.value = '';
+  }catch(err){
+    alert('Failed to add comment: ' + err.message);
+  }
+}
+window.addComment = addComment;
 
 document.querySelectorAll('.bottom-nav button').forEach(btn => {
   btn.onclick = () => {
