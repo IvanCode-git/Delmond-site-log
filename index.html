@@ -219,6 +219,15 @@
   .status-toggle{display:flex; gap:6px; margin-bottom:10px;}
   .status-toggle button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:600;}
   .status-toggle button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  .type-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 6px 4px 10px; border-radius:999px;
+    font-size:12px; font-weight:600; color:#fff;
+  }
+  .type-chip .remove-type{
+    background:rgba(255,255,255,.3); border:none; color:#fff; border-radius:50%; width:18px; height:18px;
+    font-size:12px; line-height:1; cursor:pointer; padding:0;
+  }
 </style>
 </head>
 <body>
@@ -288,16 +297,24 @@
       <div class="row">
         <div class="field">
           <label>Entry Type</label>
-          <select id="entryType">
-            <option value="progress">Progress Update</option>
-            <option value="issue">Issue</option>
-            <option value="delay">Delay</option>
-            <option value="damage">Damage by Others</option>
-          </select>
+          <select id="entryType"></select>
         </div>
         <div class="field">
           <label>Date & Time</label>
           <input type="datetime-local" id="entryDateTime">
+        </div>
+      </div>
+
+      <div class="collapsible-header" id="entryTypesHeader" style="margin-top:4px;">
+        <span style="font-size:12px; color:var(--muted); font-weight:600;">Manage entry type options</span>
+        <span class="chevron">▸</span>
+      </div>
+      <div class="collapsible-body" id="entryTypesBody">
+        <div style="height:8px;"></div>
+        <div id="entryTypesList" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="newEntryTypeInput" class="comment-input" placeholder="New type name, e.g. Inspection">
+          <button type="button" class="secondary small" id="addEntryTypeBtn">Add</button>
         </div>
       </div>
 
@@ -725,6 +742,7 @@ function attachFirestoreListeners(retriesLeft){
   let retryScheduled = false;
   let projectUnsub = null;
   let entriesUnsub = null;
+  let entryTypesUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -732,6 +750,7 @@ function attachFirestoreListeners(retriesLeft){
     retryScheduled = true;
     if(projectUnsub) projectUnsub();
     if(entriesUnsub) entriesUnsub();
+    if(entryTypesUnsub) entryTypesUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -743,6 +762,20 @@ function attachFirestoreListeners(retriesLeft){
   projectUnsub = db.collection('meta').doc('project').onSnapshot((doc) => {
     project = doc.exists ? doc.data() : {};
     renderProject();
+  }, handleSyncError);
+
+  entryTypesUnsub = db.collection('meta').doc('entryTypesConfig').onSnapshot((doc) => {
+    if(doc.exists && Array.isArray(doc.data().types) && doc.data().types.length){
+      entryTypesList = doc.data().types;
+    } else {
+      entryTypesList = DEFAULT_ENTRY_TYPES.slice();
+      db.collection('meta').doc('entryTypesConfig').set({ types: entryTypesList })
+        .catch((e) => console.warn('Could not seed entry types', e));
+    }
+    populateEntryTypeSelect();
+    renderEntryTypesManager();
+    renderEntries();
+    renderDashboard();
   }, handleSyncError);
 
   entriesUnsub = db.collection('entries').onSnapshot((snapshot) => {
@@ -802,9 +835,95 @@ function renderPhotoPreview(){
   });
 }
 
+const DEFAULT_ENTRY_TYPES = [
+  { value: 'progress', label: 'Progress Update', color: '#1d4ed8' },
+  { value: 'issue', label: 'Issue', color: '#b91c1c' },
+  { value: 'delay', label: 'Delay', color: '#b45309' },
+  { value: 'damage', label: 'Damage by Others', color: '#a21caf' }
+];
+const TYPE_PALETTE = ['#0f766e', '#7c3aed', '#c2410c', '#0369a1', '#4d7c0f', '#be185d', '#78716c', '#0891b2'];
+let entryTypesList = DEFAULT_ENTRY_TYPES.slice();
+
 function typeLabel(t){
-  return {progress:'Progress', issue:'Issue', delay:'Delay', damage:'Damage by Others'}[t] || t;
+  const found = entryTypesList.find(x => x.value === t);
+  return found ? found.label : (t || '');
 }
+
+function typeColor(t){
+  const found = entryTypesList.find(x => x.value === t);
+  return found ? found.color : '#6b7280';
+}
+
+function slugifyTypeValue(label){
+  let base = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  if(!base) base = 'type';
+  let slug = base;
+  let i = 2;
+  while(entryTypesList.some(x => x.value === slug)){
+    slug = base + '-' + i;
+    i++;
+  }
+  return slug;
+}
+
+function populateEntryTypeSelect(){
+  const sel = document.getElementById('entryType');
+  const prevValue = sel.value;
+  sel.innerHTML = entryTypesList.map(t => `<option value="${t.value}">${escapeHtml(t.label)}</option>`).join('');
+  if(entryTypesList.some(t => t.value === prevValue)) sel.value = prevValue;
+}
+
+function renderEntryTypesManager(){
+  const list = document.getElementById('entryTypesList');
+  list.innerHTML = entryTypesList.map(t => `
+    <span class="type-chip" style="background:${t.color};">
+      ${escapeHtml(t.label)}
+      <button type="button" class="remove-type" onclick="removeEntryType('${t.value}')" title="Remove">×</button>
+    </span>
+  `).join('');
+}
+
+async function saveEntryTypesConfig(){
+  try{
+    await db.collection('meta').doc('entryTypesConfig').set({ types: entryTypesList });
+  }catch(err){
+    alert('Failed to save entry types: ' + err.message);
+  }
+}
+
+async function removeEntryType(value){
+  if(entryTypesList.length <= 1){
+    alert('You need at least one entry type.');
+    return;
+  }
+  if(!confirm('Remove this entry type? Existing entries using it will keep showing it, but it won\'t be selectable for new ones.')) return;
+  entryTypesList = entryTypesList.filter(t => t.value !== value);
+  await saveEntryTypesConfig();
+  populateEntryTypeSelect();
+  renderEntryTypesManager();
+}
+window.removeEntryType = removeEntryType;
+
+document.getElementById('entryTypesHeader').onclick = () => {
+  const isOpen = document.getElementById('entryTypesBody').classList.contains('open');
+  setCollapsible('entryTypesHeader', 'entryTypesBody', !isOpen);
+};
+
+document.getElementById('addEntryTypeBtn').onclick = async () => {
+  const input = document.getElementById('newEntryTypeInput');
+  const label = input.value.trim();
+  if(!label) return;
+  const value = slugifyTypeValue(label);
+  const color = TYPE_PALETTE[entryTypesList.length % TYPE_PALETTE.length];
+  entryTypesList.push({ value, label, color });
+  input.value = '';
+  await saveEntryTypesConfig();
+  populateEntryTypeSelect();
+  renderEntryTypesManager();
+};
+
+populateEntryTypeSelect();
+renderEntryTypesManager();
 
 function escapeHtml(str){
   const div = document.createElement('div');
@@ -880,7 +999,7 @@ function renderEntries(){
       <div class="entry-item">
         <div class="entry-row" onclick="toggleEntryDetail('${e.id}')">
           <input type="checkbox" class="entry-select" data-id="${e.id}" ${selectedEntryIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleEntrySelection('${e.id}', this.checked)">
-          <span class="status-dot" style="background:${TYPE_COLORS[e.type] || '#6b7280'};"></span>
+          <span class="status-dot" style="background:${typeColor(e.type)};"></span>
           <div class="entry-row-main">
             <div class="entry-row-title">${escapeHtml(title)}${e.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
             <div class="entry-row-sub">${escapeHtml(subtitle)}</div>
@@ -1011,7 +1130,7 @@ function generateTemplateEmail(id){
   const e = entries.find(x => x.id === id);
   if(!e) return;
   const statusEl = document.getElementById('emailStatus-' + id);
-  const tpl = EMAIL_TEMPLATES[e.type] || EMAIL_TEMPLATES.progress;
+  const tpl = EMAIL_TEMPLATES[e.type] || { topic: (typeLabel(e.type) || 'an update').toLowerCase(), label: typeLabel(e.type) || 'Site Log Update' };
 
   const dt = new Date(e.dateTime);
   const dtStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
@@ -1646,13 +1765,6 @@ document.querySelectorAll('.bottom-nav button').forEach(btn => {
   };
 });
 
-const TYPE_COLORS = {
-  progress: '#1d4ed8',
-  issue: '#b91c1c',
-  delay: '#b45309',
-  damage: '#a21caf'
-};
-
 function renderDashboard(){
   const weekEndingInput = document.getElementById('weekEnding');
   if(!weekEndingInput.value){
@@ -1714,8 +1826,12 @@ function renderDashboard(){
     }).join('');
   }
 
-  const typeCounts = { progress: 0, issue: 0, delay: 0, damage: 0 };
-  entries.forEach(e => { if(typeCounts[e.type] !== undefined) typeCounts[e.type]++; });
+  const typeCounts = {};
+  entryTypesList.forEach(t => { typeCounts[t.value] = 0; });
+  entries.forEach(e => {
+    if(typeCounts[e.type] !== undefined) typeCounts[e.type]++;
+    else typeCounts['__other__'] = (typeCounts['__other__'] || 0) + 1;
+  });
   const total = entries.length;
   const pieEl = document.getElementById('typePie');
   const legendEl = document.getElementById('typeLegend');
@@ -1727,19 +1843,24 @@ function renderDashboard(){
     const stops = [];
     Object.keys(typeCounts).forEach(t => {
       const count = typeCounts[t];
-      if(count === 0) return;
+      if(!count) return;
+      const color = t === '__other__' ? '#9ca3af' : typeColor(t);
       const start = (acc / total) * 360;
       acc += count;
       const end = (acc / total) * 360;
-      stops.push(`${TYPE_COLORS[t]} ${start}deg ${end}deg`);
+      stops.push(`${color} ${start}deg ${end}deg`);
     });
     pieEl.style.background = `conic-gradient(${stops.join(', ')})`;
-    legendEl.innerHTML = Object.keys(typeCounts).filter(t => typeCounts[t] > 0).map(t => `
-      <div class="legend-item">
-        <span class="legend-swatch" style="background:${TYPE_COLORS[t]};"></span>
-        ${typeLabel(t)} (${typeCounts[t]})
-      </div>
-    `).join('');
+    legendEl.innerHTML = Object.keys(typeCounts).filter(t => typeCounts[t] > 0).map(t => {
+      const color = t === '__other__' ? '#9ca3af' : typeColor(t);
+      const label = t === '__other__' ? 'Other' : typeLabel(t);
+      return `
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:${color};"></span>
+          ${label} (${typeCounts[t]})
+        </div>
+      `;
+    }).join('');
   }
 
   const groups = {};
