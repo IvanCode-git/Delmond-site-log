@@ -228,6 +228,23 @@
     background:rgba(255,255,255,.3); border:none; color:#fff; border-radius:50%; width:18px; height:18px;
     font-size:12px; line-height:1; cursor:pointer; padding:0;
   }
+
+  .level-row{
+    display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);
+  }
+  .level-row:last-child{border-bottom:none;}
+  .level-thumb{
+    width:44px; height:33px; border-radius:6px; border:1px solid var(--border); flex-shrink:0;
+    background-size:cover; background-position:center; background-color:#f4f5f7;
+    display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--muted); text-align:center; overflow:hidden;
+  }
+  .level-row-name{flex:1; font-size:13px; font-weight:600; min-width:0;}
+  .level-row-actions{display:flex; align-items:center; gap:6px; flex-shrink:0;}
+  .level-upload-label{
+    background:#fff; color:var(--accent); border:1px solid var(--accent); border-radius:6px;
+    padding:5px 10px; font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .level-upload-label input{display:none;}
 </style>
 </head>
 <body>
@@ -322,6 +339,22 @@
       <div class="field">
         <label>Level</label>
         <select id="entryLevel"></select>
+      </div>
+
+      <div class="collapsible-header" id="levelsHeader" style="margin-top:4px;">
+        <span style="font-size:12px; color:var(--muted); font-weight:600;">Manage levels &amp; drawings</span>
+        <span class="chevron">▸</span>
+      </div>
+      <div class="collapsible-body" id="levelsBody">
+        <div style="height:8px;"></div>
+        <div id="levelsManagerList"></div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="text" id="newLevelInput" class="comment-input" placeholder="New level name, e.g. Roof">
+          <button type="button" class="secondary small" id="addLevelBtn">Add Level</button>
+        </div>
+        <p style="font-size:11px; color:var(--muted); margin:8px 0 0;">
+          Upload a PDF or image drawing per level — it's auto-cropped, compressed, and synced to everyone.
+        </p>
       </div>
 
       <div id="areaMarkerWrap" style="display:none;">
@@ -491,6 +524,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -504,6 +538,10 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
 
 const LS_MEDIA_PREFIX = 'siteLog.media.';
 
@@ -623,12 +661,6 @@ const LEVELS = [
   'Level 5', 'Level 6', 'Level 7', 'Level 8'
 ];
 
-function populateLevelSelect(sel){
-  sel.innerHTML = '<option value="">Select level…</option>' +
-    LEVELS.map(l => `<option value="${l}">${l}</option>`).join('');
-}
-populateLevelSelect(document.getElementById('entryLevel'));
-
 const LEVEL_PLANS = {
   'Level 1': 'plans/level-1.png',
   'Level 2': 'plans/level-2.png',
@@ -639,6 +671,213 @@ const LEVEL_PLANS = {
   'Level 7': 'plans/level-7.png',
   'Mezzanine': 'plans/mezzanine.png'
 };
+
+let levelsList = LEVELS.slice();
+let customLevelPlans = {};
+
+function getPlanForLevel(level){
+  return (customLevelPlans && customLevelPlans[level]) || LEVEL_PLANS[level] || null;
+}
+
+function populateLevelSelect(sel){
+  const prevValue = sel.value;
+  sel.innerHTML = '<option value="">Select level…</option>' +
+    levelsList.map(l => `<option value="${l}">${l}</option>`).join('');
+  if(levelsList.includes(prevValue)) sel.value = prevValue;
+}
+populateLevelSelect(document.getElementById('entryLevel'));
+
+function renderLevelsManager(){
+  const container = document.getElementById('levelsManagerList');
+  container.innerHTML = levelsList.map(lvl => {
+    const planSrc = getPlanForLevel(lvl);
+    const thumbStyle = planSrc ? `background-image:url('${planSrc}');` : '';
+    const thumbText = planSrc ? '' : 'No drawing';
+    return `
+      <div class="level-row" data-level="${escapeHtml(lvl)}">
+        <div class="level-thumb" style="${thumbStyle}">${thumbText}</div>
+        <div class="level-row-name">${escapeHtml(lvl)}</div>
+        <div class="level-row-actions">
+          <label class="level-upload-label">Upload<input type="file" accept="image/*,.pdf" class="level-upload-input"></label>
+          <button type="button" class="danger small remove-level-btn">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('levelsManagerList').addEventListener('change', (ev) => {
+  if(!ev.target.classList.contains('level-upload-input')) return;
+  const row = ev.target.closest('.level-row');
+  const levelName = row.dataset.level;
+  const file = ev.target.files[0];
+  if(file) handleLevelPlanUpload(levelName, file, row);
+});
+
+document.getElementById('levelsManagerList').addEventListener('click', (ev) => {
+  if(!ev.target.classList.contains('remove-level-btn')) return;
+  const row = ev.target.closest('.level-row');
+  removeLevel(row.dataset.level);
+});
+
+renderLevelsManager();
+
+async function saveLevelsConfig(){
+  try{
+    await db.collection('meta').doc('levelsConfig').set({ levels: levelsList, plans: customLevelPlans });
+  }catch(err){
+    alert('Failed to save levels: ' + err.message);
+  }
+}
+
+async function removeLevel(levelName){
+  if(levelsList.length <= 1){
+    alert('You need at least one level.');
+    return;
+  }
+  if(!confirm(`Remove "${levelName}"? Existing entries will keep showing it, but it won't be selectable for new ones.`)) return;
+  levelsList = levelsList.filter(l => l !== levelName);
+  delete customLevelPlans[levelName];
+  await saveLevelsConfig();
+  populateLevelSelect(document.getElementById('entryLevel'));
+  renderLevelsManager();
+}
+window.removeLevel = removeLevel;
+
+document.getElementById('addLevelBtn').onclick = async () => {
+  const input = document.getElementById('newLevelInput');
+  const name = input.value.trim();
+  if(!name) return;
+  if(levelsList.includes(name)){
+    alert('That level already exists.');
+    return;
+  }
+  levelsList.push(name);
+  input.value = '';
+  await saveLevelsConfig();
+  populateLevelSelect(document.getElementById('entryLevel'));
+  renderLevelsManager();
+};
+
+document.getElementById('levelsHeader').onclick = () => {
+  const isOpen = document.getElementById('levelsBody').classList.contains('open');
+  setCollapsible('levelsHeader', 'levelsBody', !isOpen);
+};
+
+function autoCropCanvas(canvas){
+  const w = canvas.width, h = canvas.height;
+  const sampleW = 200;
+  const scale = sampleW / w;
+  const sampleH = Math.max(1, Math.round(h * scale));
+  const small = document.createElement('canvas');
+  small.width = sampleW;
+  small.height = sampleH;
+  small.getContext('2d').drawImage(canvas, 0, 0, sampleW, sampleH);
+  const data = small.getContext('2d').getImageData(0, 0, sampleW, sampleH).data;
+
+  let minX = sampleW, minY = sampleH, maxX = 0, maxY = 0, found = false;
+  for(let y = 0; y < sampleH; y++){
+    for(let x = 0; x < sampleW; x++){
+      const i = (y * sampleW + x) * 4;
+      if(data[i] > 12 || data[i + 1] > 12 || data[i + 2] > 12){
+        found = true;
+        if(x < minX) minX = x;
+        if(x > maxX) maxX = x;
+        if(y < minY) minY = y;
+        if(y > maxY) maxY = y;
+      }
+    }
+  }
+  if(!found) return canvas;
+
+  const padX = Math.round((maxX - minX) * 0.02) + 1;
+  const padY = Math.round((maxY - minY) * 0.02) + 1;
+  minX = Math.max(0, minX - padX);
+  minY = Math.max(0, minY - padY);
+  maxX = Math.min(sampleW, maxX + padX);
+  maxY = Math.min(sampleH, maxY + padY);
+
+  const fx = w / sampleW, fy = h / sampleH;
+  const cropX = Math.round(minX * fx), cropY = Math.round(minY * fy);
+  const cropW = Math.round((maxX - minX) * fx), cropH = Math.round((maxY - minY) * fy);
+  if(cropW <= 0 || cropH <= 0) return canvas;
+
+  const out = document.createElement('canvas');
+  out.width = cropW;
+  out.height = cropH;
+  out.getContext('2d').drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  return out;
+}
+
+function canvasToResizedJpeg(canvas, maxWidth){
+  let source = canvas;
+  if(source.width > maxWidth){
+    const scale = maxWidth / source.width;
+    const out = document.createElement('canvas');
+    out.width = Math.round(source.width * scale);
+    out.height = Math.round(source.height * scale);
+    out.getContext('2d').drawImage(source, 0, 0, out.width, out.height);
+    source = out;
+  }
+  return source.toDataURL('image/jpeg', 0.72);
+}
+
+function fileToCanvas(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function renderPdfFirstPageToCanvas(file){
+  if(!window.pdfjsLib) throw new Error('PDF support did not load — try an image file instead.');
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+  const baseViewport = page.getViewport({ scale: 1 });
+  const scale = 1800 / baseViewport.width;
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return canvas;
+}
+
+async function processLevelPlanFile(file){
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  const canvas = isPdf ? await renderPdfFirstPageToCanvas(file) : await fileToCanvas(file);
+  const cropped = autoCropCanvas(canvas);
+  return canvasToResizedJpeg(cropped, 1100);
+}
+
+async function handleLevelPlanUpload(levelName, file, row){
+  const thumb = row.querySelector('.level-thumb');
+  const prevHtml = thumb.innerHTML;
+  thumb.innerHTML = '…';
+  try{
+    const dataUrl = await processLevelPlanFile(file);
+    customLevelPlans[levelName] = dataUrl;
+    await saveLevelsConfig();
+    renderLevelsManager();
+    renderEntries();
+    if(document.getElementById('entryLevel').value === levelName){
+      loadLevelPlan(levelName);
+    }
+  }catch(err){
+    alert('Could not process that file: ' + err.message);
+    thumb.innerHTML = prevHtml;
+  }
+}
 
 let currentAreaMarker = null;
 
@@ -652,7 +891,7 @@ function loadLevelPlan(level){
   const planBox = document.getElementById('planBox');
   const planImage = document.getElementById('planImage');
   const planLabel = document.getElementById('planLabel');
-  const planSrc = LEVEL_PLANS[level];
+  const planSrc = getPlanForLevel(level);
 
   if(planSrc){
     planImage.onload = () => {
@@ -743,6 +982,7 @@ function attachFirestoreListeners(retriesLeft){
   let projectUnsub = null;
   let entriesUnsub = null;
   let entryTypesUnsub = null;
+  let levelsConfigUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -751,6 +991,7 @@ function attachFirestoreListeners(retriesLeft){
     if(projectUnsub) projectUnsub();
     if(entriesUnsub) entriesUnsub();
     if(entryTypesUnsub) entryTypesUnsub();
+    if(levelsConfigUnsub) levelsConfigUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -776,6 +1017,21 @@ function attachFirestoreListeners(retriesLeft){
     renderEntryTypesManager();
     renderEntries();
     renderDashboard();
+  }, handleSyncError);
+
+  levelsConfigUnsub = db.collection('meta').doc('levelsConfig').onSnapshot((doc) => {
+    if(doc.exists && Array.isArray(doc.data().levels) && doc.data().levels.length){
+      levelsList = doc.data().levels;
+      customLevelPlans = doc.data().plans || {};
+    } else {
+      levelsList = LEVELS.slice();
+      customLevelPlans = {};
+      db.collection('meta').doc('levelsConfig').set({ levels: levelsList, plans: {} })
+        .catch((e) => console.warn('Could not seed levels config', e));
+    }
+    populateLevelSelect(document.getElementById('entryLevel'));
+    renderLevelsManager();
+    renderEntries();
   }, handleSyncError);
 
   entriesUnsub = db.collection('entries').onSnapshot((snapshot) => {
@@ -971,7 +1227,7 @@ function renderEntries(){
     if(e.taskType) locationBits.push('Task: ' + escapeHtml(e.taskType));
     const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
 
-    const miniPlanSrc = LEVEL_PLANS[e.level];
+    const miniPlanSrc = getPlanForLevel(e.level);
     const miniStyle = miniPlanSrc
       ? `background-image:url('${miniPlanSrc}'); background-size:cover; background-position:center;`
       : '';
@@ -1275,7 +1531,7 @@ async function drawEntryIntoDoc(doc, id){
     y += notesLines.length * 5.5 + 6;
 
     const localMedia = getLocalMedia(e.id);
-    const planImgUrl = LEVEL_PLANS[e.level];
+    const planImgUrl = getPlanForLevel(e.level);
 
     if(e.areaMarker && planImgUrl){
       try{
