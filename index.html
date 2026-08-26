@@ -940,6 +940,25 @@ db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
 
 const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT4222lFHjzkkpq_sCf_gvrv_wU16BlQ5pE';
 const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
+const EMAIL_WORKER_URL = NOTIFY_WORKER_URL + 'email';
+const VAL_EMAIL = 'VAL_EMAIL_PLACEHOLDER';
+
+async function sendSummaryEmailToVal(subject, bodyLines){
+  if(VAL_EMAIL === 'VAL_EMAIL_PLACEHOLDER') return;
+  try{
+    await fetch(EMAIL_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: VAL_EMAIL,
+        subject,
+        html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('')
+      })
+    });
+  }catch(err){
+    console.warn('Could not send summary email', err);
+  }
+}
 let messaging = null;
 try{
   if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
@@ -2949,6 +2968,17 @@ async function toggleTaskComplete(id, makeComplete){
       update.completedAt = null;
     }
     await db.collection('tasks').doc(id).update(update);
+    if(makeComplete){
+      const task = tasks.find(t => t.id === id);
+      sendSummaryEmailToVal(
+        `Task completed by ${currentSession.name}`,
+        [
+          `<strong>${escapeHtml(currentSession.name)}</strong> (${escapeHtml(currentSession.roleLabel)}) just marked a task as complete.`,
+          task ? `<strong>Task:</strong> ${escapeHtml(task.message || '')}` : '',
+          `<strong>Completed at:</strong> ${new Date().toLocaleString()}`
+        ]
+      );
+    }
   }catch(err){
     alert('Failed to update task status: ' + err.message);
   }
@@ -3485,10 +3515,23 @@ window.sendLocationReply = sendLocationReply;
 
 async function finishLocation(id){
   try{
+    const loc = workingLocations.find(l => l.id === id);
     await db.collection('workingLocations').doc(id).update({
       active: false,
       finishedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    if(loc){
+      const durationMs = Math.max(0, new Date() - (loc.createdAt && loc.createdAt.toDate ? loc.createdAt.toDate() : new Date()));
+      sendSummaryEmailToVal(
+        `${loc.workerName || loc.tradeLabel} finished at ${loc.level}`,
+        [
+          `<strong>${escapeHtml(loc.workerName || loc.tradeLabel)}</strong> (${escapeHtml(loc.tradeLabel)}) just finished their check-in.`,
+          `<strong>Level:</strong> ${escapeHtml(loc.level)}`,
+          loc.description ? `<strong>What they were doing:</strong> ${escapeHtml(loc.description)}` : '',
+          `<strong>Duration:</strong> ${formatDuration(durationMs)}`
+        ]
+      );
+    }
   }catch(err){
     alert('Failed to clear that check-in: ' + err.message);
   }
