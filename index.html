@@ -164,14 +164,26 @@
   }
   .bottom-nav button{
     flex:1; background:transparent; color:var(--muted); border:none; border-radius:0;
-    padding:9px 4px 8px; font-size:10.5px; font-weight:700;
+    padding:7px 2px 6px; font-size:10.5px; font-weight:700;
     display:flex; flex-direction:column; align-items:center; gap:3px; box-shadow:none;
   }
   .bottom-nav button:hover{background:transparent; box-shadow:none;}
   .bottom-nav button:active{transform:none;}
-  .bottom-nav button .nav-icon{font-size:19px; line-height:1; transition:transform .15s ease;}
+  .bottom-nav button .nav-icon{
+    font-size:23px; line-height:1; transition:all .15s ease;
+    width:46px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:16px;
+  }
   .bottom-nav button.active{color:var(--accent);}
-  .bottom-nav button.active .nav-icon{transform:translateY(-1px);}
+  .bottom-nav button.active .nav-icon{background:var(--accent-light);}
+  .more-row{
+    display:flex; align-items:center; gap:14px; padding:16px 6px; border-bottom:1px solid var(--border);
+    cursor:pointer; border-radius:10px; transition:background .12s ease;
+  }
+  .more-row:last-child{border-bottom:none;}
+  .more-row:hover{background:var(--accent-light);}
+  .more-row-icon{font-size:26px; flex-shrink:0; width:34px; text-align:center;}
+  .more-row-label{flex:1; font-size:16px; font-weight:700; color:var(--text);}
+  .more-row-arrow{font-size:22px; color:var(--muted);}
 
   .stat-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px;}
   .stat-tile{background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;}
@@ -758,6 +770,22 @@
 
   </div>
 
+  <div id="moreView" style="display:none;">
+    <div class="card">
+      <h2>More</h2>
+      <div class="more-row" onclick="showTab('requests')">
+        <span class="more-row-icon">📥</span>
+        <div class="more-row-label">Requests</div>
+        <span class="more-row-arrow">›</span>
+      </div>
+      <div class="more-row" onclick="showTab('dashboard')">
+        <span class="more-row-icon">📊</span>
+        <div class="more-row-label">Dashboard</div>
+        <span class="more-row-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
   <div id="messagesView" style="display:none;">
 
     <div class="card" id="messagesContactsCard">
@@ -786,12 +814,11 @@
 <nav class="bottom-nav">
   <button data-tab="log" data-roles="pm,supervisor,engineer" class="active"><span class="nav-icon">📋</span>Log</button>
   <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">✅</span>Tasks</button>
-  <button data-tab="requests" data-roles="pm,supervisor,engineer"><span class="nav-icon">📥</span>Requests</button>
+  <button data-tab="requestEntry" data-roles="labourer,fixers,jointers"><span class="nav-icon">✍️</span>Report</button>
   <button data-tab="team" data-roles="pm,supervisor,engineer"><span class="nav-icon">👷</span>Team</button>
-  <button data-tab="dashboard" data-roles="pm,supervisor,engineer"><span class="nav-icon">📊</span>Dashboard</button>
-  <button data-tab="requestEntry" data-roles="labourer,fixers,jointers"><span class="nav-icon">✍️</span>Request Entry</button>
   <button data-tab="workingLocations" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">📍</span>Locations</button>
-  <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">💬</span>Messages<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
+  <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">💬</span>Chat<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
+  <button data-tab="more" data-roles="pm,supervisor,engineer"><span class="nav-icon">☰</span>More</button>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1023,7 +1050,7 @@ async function sendPushNotificationToUser(username, title, body){
   }
 }
 
-const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', workingLocations: 'workingLocationsView', team: 'teamView', messages: 'messagesView' };
+const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', workingLocations: 'workingLocationsView', team: 'teamView', more: 'moreView', messages: 'messagesView' };
 
 function hideAllAppUI(){
   Object.values(VIEW_IDS).forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -1037,7 +1064,8 @@ function showTab(tab){
   Object.entries(VIEW_IDS).forEach(([t, id]) => {
     document.getElementById(id).style.display = (t === tab) ? 'block' : 'none';
   });
-  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const navActiveTab = (tab === 'requests' || tab === 'dashboard') ? 'more' : tab;
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === navActiveTab));
   if(tab === 'dashboard') renderDashboard();
   if(tab === 'tasks') renderTasks();
   if(tab === 'requests') renderRequests();
