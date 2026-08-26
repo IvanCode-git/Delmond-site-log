@@ -368,6 +368,19 @@
   <div id="logView">
 
     <div class="card">
+      <h2>Daily Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every log entry from a chosen day as Excel or PDF.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="logReportDate">
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button type="button" id="logReportExcelBtn">📊 Download Excel</button>
+        <button type="button" id="logReportPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="collapsible-header" id="projectDetailsHeader">
         <h2 style="margin:0;">Project Details</h2>
         <span class="chevron">▸</span>
@@ -582,6 +595,10 @@
         </div>
       </div>
       <div class="stat-grid" id="statGrid"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
+        <button type="button" id="dashboardReportExcelBtn">📊 Download Excel</button>
+        <button type="button" id="dashboardReportPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
     </div>
 
     <div class="card">
@@ -607,6 +624,19 @@
   </div>
 
   <div id="tasksView" style="display:none;">
+
+    <div class="card" id="tasksReportCard" style="display:none;">
+      <h2>Daily Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every task assigned on a chosen day as Excel or PDF.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="tasksReportDate">
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button type="button" id="tasksReportExcelBtn">📊 Download Excel</button>
+        <button type="button" id="tasksReportPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
+    </div>
 
     <div class="card" id="assignTaskCard">
       <h2>Assign a Task</h2>
@@ -648,6 +678,19 @@
   </div>
 
   <div id="requestsView" style="display:none;">
+    <div class="card">
+      <h2>Daily Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every request submitted on a chosen day as Excel or PDF.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="requestsReportDate">
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button type="button" id="requestsReportExcelBtn">📊 Download Excel</button>
+        <button type="button" id="requestsReportPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Entry Requests from Labourers</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">
@@ -704,7 +747,10 @@
         <label>Date</label>
         <input type="date" id="exportDayDate">
       </div>
-      <button type="button" id="exportDayBtn" style="margin-top:12px;">📊 Download Excel</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button type="button" id="exportDayBtn">📊 Download Excel</button>
+        <button type="button" id="exportDayPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
     </div>
 
     <div class="card" id="submitLocationCard">
@@ -777,6 +823,19 @@
         </div>
       </div>
       <button type="button" id="addWorkerBtn">Add Worker</button>
+    </div>
+
+    <div class="card">
+      <h2>Daily Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download a roster summary for a chosen day as Excel or PDF — who worked, hours, and task activity.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="teamReportDate">
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button type="button" id="teamReportExcelBtn">📊 Download Excel</button>
+        <button type="button" id="teamReportPdfBtn" class="secondary">📄 Download PDF</button>
+      </div>
     </div>
 
     <div class="card">
@@ -859,6 +918,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
@@ -2815,6 +2875,8 @@ document.getElementById('assignTaskBtn').onclick = async () => {
 function renderTasks(){
   const assignCard = document.getElementById('assignTaskCard');
   if(assignCard) assignCard.style.display = isManagement() ? 'block' : 'none';
+  const tasksReportCard = document.getElementById('tasksReportCard');
+  if(tasksReportCard) tasksReportCard.style.display = isManagement() ? 'block' : 'none';
   if(isManagement()) populateTaskTargetWorkerSelect();
 
   const list = document.getElementById('tasksList');
@@ -3433,16 +3495,57 @@ async function finishLocation(id){
 }
 window.finishLocation = finishLocation;
 
-document.getElementById('exportDayBtn').onclick = () => {
-  const dateStr = document.getElementById('exportDayDate').value;
-  if(!dateStr){
-    alert('Pick a date first.');
-    return;
-  }
+function dayRange(dateStr){
   const [y, m, d] = dateStr.split('-').map(Number);
-  const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
-  const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return {
+    start: new Date(y, m - 1, d, 0, 0, 0, 0),
+    end: new Date(y, m - 1, d, 23, 59, 59, 999)
+  };
+}
 
+function downloadReportExcel(rows, fileName, sheetName, colWidths){
+  const ws = XLSX.utils.json_to_sheet(rows);
+  if(colWidths) ws['!cols'] = colWidths;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Report');
+  XLSX.writeFile(wb, fileName);
+}
+
+function downloadReportPdf(title, subtitle, rows, fileName){
+  const doc = new jspdf.jsPDF({ orientation: 'landscape' });
+  const marginX = 14;
+  let y = 16;
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text(title, marginX, y);
+  y += 7;
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(100);
+  doc.text(subtitle, marginX, y);
+  doc.setTextColor(0);
+
+  if(rows.length === 0){
+    doc.setFont(undefined, 'italic');
+    doc.setFontSize(11);
+    doc.text('No activity recorded.', marginX, y + 10);
+  } else {
+    const headers = Object.keys(rows[0]);
+    const body = rows.map(r => headers.map(h => String(r[h] ?? '')));
+    doc.autoTable({
+      startY: y + 6,
+      head: [headers],
+      body,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [31, 42, 84] },
+      margin: { left: marginX, right: marginX }
+    });
+  }
+  doc.save(fileName);
+}
+
+function buildLocationsDayRows(dateStr){
+  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
   const dayEntries = workingLocations
     .filter(l => {
       const start = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
@@ -3450,12 +3553,7 @@ document.getElementById('exportDayBtn').onclick = () => {
     })
     .sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
 
-  if(dayEntries.length === 0){
-    alert('No activity recorded for that day.');
-    return;
-  }
-
-  const rows = dayEntries.map(l => {
+  return dayEntries.map(l => {
     const start = l.createdAt.toDate();
     const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate() : null;
     const replies = (l.comments || []).map(c => `${c.author}: ${c.text}`).join(' | ');
@@ -3470,12 +3568,183 @@ document.getElementById('exportDayBtn').onclick = () => {
       'Replies': replies
     };
   });
+}
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 45 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Daily Report');
-  XLSX.writeFile(wb, `Delmond Daily Report ${dateStr}.xlsx`);
+document.getElementById('exportDayBtn').onclick = () => {
+  const dateStr = document.getElementById('exportDayDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildLocationsDayRows(dateStr);
+  if(rows.length === 0){ alert('No activity recorded for that day.'); return; }
+  downloadReportExcel(rows, `Delmond Locations ${dateStr}.xlsx`, 'Daily Report',
+    [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 45 }]);
+};
+
+document.getElementById('exportDayPdfBtn').onclick = () => {
+  const dateStr = document.getElementById('exportDayDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildLocationsDayRows(dateStr);
+  if(rows.length === 0){ alert('No activity recorded for that day.'); return; }
+  downloadReportPdf('Delmond Site Log — Locations Report', dateStr, rows, `Delmond Locations ${dateStr}.pdf`);
+};
+
+// ---- Daily Report: Log ----
+
+function buildLogDayRows(dateStr){
+  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
+  const dayEntries = entries
+    .filter(e => {
+      const dt = new Date(e.dateTime);
+      return !isNaN(dt) && dt >= dayStart && dt <= dayEnd;
+    })
+    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+  return dayEntries.map(e => ({
+    'Time': new Date(e.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    'Type': typeLabel(e.type),
+    'Level': e.level || '',
+    'Area': e.area || '',
+    'Task Type': e.taskType || '',
+    'Progress': (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '',
+    'Notes': e.notes || '',
+    'Status': e.completed ? 'Completed' : 'Active'
+  }));
+}
+
+document.getElementById('logReportExcelBtn').onclick = () => {
+  const dateStr = document.getElementById('logReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildLogDayRows(dateStr);
+  if(rows.length === 0){ alert('No log entries recorded for that day.'); return; }
+  downloadReportExcel(rows, `Delmond Log ${dateStr}.xlsx`, 'Daily Report',
+    [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 45 }, { wch: 12 }]);
+};
+
+document.getElementById('logReportPdfBtn').onclick = () => {
+  const dateStr = document.getElementById('logReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildLogDayRows(dateStr);
+  if(rows.length === 0){ alert('No log entries recorded for that day.'); return; }
+  downloadReportPdf('Delmond Site Log — Log Entries Report', dateStr, rows, `Delmond Log ${dateStr}.pdf`);
+};
+
+// ---- Daily Report: Tasks ----
+
+function buildTasksDayRows(dateStr){
+  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
+  const dayTasks = tasks
+    .filter(t => {
+      const dt = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
+      return dt && dt >= dayStart && dt <= dayEnd;
+    })
+    .sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
+
+  return dayTasks.map(t => ({
+    'Time': t.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    'Message': t.message || '',
+    'Sent To': t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'],
+    'Assigned By': t.assignedByName || '',
+    'Status': t.completed ? 'Completed' : 'Active',
+    'Responses': (t.comments || []).length
+  }));
+}
+
+document.getElementById('tasksReportExcelBtn').onclick = () => {
+  const dateStr = document.getElementById('tasksReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildTasksDayRows(dateStr);
+  if(rows.length === 0){ alert('No tasks assigned on that day.'); return; }
+  downloadReportExcel(rows, `Delmond Tasks ${dateStr}.xlsx`, 'Daily Report',
+    [{ wch: 10 }, { wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 10 }]);
+};
+
+document.getElementById('tasksReportPdfBtn').onclick = () => {
+  const dateStr = document.getElementById('tasksReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildTasksDayRows(dateStr);
+  if(rows.length === 0){ alert('No tasks assigned on that day.'); return; }
+  downloadReportPdf('Delmond Site Log — Tasks Report', dateStr, rows, `Delmond Tasks ${dateStr}.pdf`);
+};
+
+// ---- Daily Report: Team ----
+
+function buildTeamDayRows(dateStr){
+  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
+  const activeWorkers = [...workers].filter(w => w.active !== false).sort((a, b) => a.name.localeCompare(b.name));
+
+  return activeWorkers.map(w => {
+    const dayLocs = workingLocations.filter(l => {
+      const dt = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
+      return l.workerUsername === w.username && dt && dt >= dayStart && dt <= dayEnd;
+    });
+    const hoursMs = dayLocs.reduce((sum, l) => sum + sessionDurationMs(l), 0);
+    const responses = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => {
+      const cd = new Date(c.dateTime);
+      return c.authorUsername === w.username && !isNaN(cd) && cd >= dayStart && cd <= dayEnd;
+    }).length, 0);
+    return {
+      'Name': w.name,
+      'Trade': TRADE_LABELS[w.trade] || w.trade,
+      'Checked In': dayLocs.length > 0 ? 'Yes' : 'No',
+      'Hours': formatDuration(hoursMs),
+      'Task Responses': responses
+    };
+  });
+}
+
+document.getElementById('teamReportExcelBtn').onclick = () => {
+  const dateStr = document.getElementById('teamReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildTeamDayRows(dateStr);
+  if(rows.length === 0){ alert('No active workers to report on.'); return; }
+  downloadReportExcel(rows, `Delmond Team ${dateStr}.xlsx`, 'Daily Report',
+    [{ wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }]);
+};
+
+document.getElementById('teamReportPdfBtn').onclick = () => {
+  const dateStr = document.getElementById('teamReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildTeamDayRows(dateStr);
+  if(rows.length === 0){ alert('No active workers to report on.'); return; }
+  downloadReportPdf('Delmond Site Log — Team Report', dateStr, rows, `Delmond Team ${dateStr}.pdf`);
+};
+
+// ---- Daily Report: Requests ----
+
+function buildRequestsDayRows(dateStr){
+  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
+  const dayReqs = entryRequests
+    .filter(r => {
+      const dt = r.submittedAt && r.submittedAt.toDate ? r.submittedAt.toDate() : null;
+      return dt && dt >= dayStart && dt <= dayEnd;
+    })
+    .sort((a, b) => tsOf(a.submittedAt) - tsOf(b.submittedAt));
+
+  return dayReqs.map(r => ({
+    'Time': r.submittedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    'Type': typeLabel(r.type),
+    'Level': r.level || '',
+    'Area': r.area || '',
+    'Notes': r.notes || '',
+    'Status': r.status.charAt(0).toUpperCase() + r.status.slice(1),
+    'Submitted By': r.submittedByName || ''
+  }));
+}
+
+document.getElementById('requestsReportExcelBtn').onclick = () => {
+  const dateStr = document.getElementById('requestsReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildRequestsDayRows(dateStr);
+  if(rows.length === 0){ alert('No requests submitted on that day.'); return; }
+  downloadReportExcel(rows, `Delmond Requests ${dateStr}.xlsx`, 'Daily Report',
+    [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 45 }, { wch: 10 }, { wch: 16 }]);
+};
+
+document.getElementById('requestsReportPdfBtn').onclick = () => {
+  const dateStr = document.getElementById('requestsReportDate').value;
+  if(!dateStr){ alert('Pick a date first.'); return; }
+  const rows = buildRequestsDayRows(dateStr);
+  if(rows.length === 0){ alert('No requests submitted on that day.'); return; }
+  downloadReportPdf('Delmond Site Log — Requests Report', dateStr, rows, `Delmond Requests ${dateStr}.pdf`);
 };
 
 async function requestTradeCheckIn(trade){
@@ -3964,9 +4233,58 @@ function renderDashboard(){
   }
 }
 
+function computePlannerRows(){
+  const groups = {};
+  entries.forEach(e => {
+    const key = (e.level || 'Unspecified') + '|' + (e.taskType || 'Unspecified');
+    if(!groups[key] || new Date(e.dateTime) > new Date(groups[key].dateTime)){
+      groups[key] = e;
+    }
+  });
+  return Object.values(groups).sort((a, b) => {
+    const cmp = (a.level || '').localeCompare(b.level || '');
+    return cmp !== 0 ? cmp : (a.taskType || '').localeCompare(b.taskType || '');
+  });
+}
+
+function buildDashboardRows(){
+  return computePlannerRows().map(e => {
+    const dt = new Date(e.dateTime);
+    return {
+      'Level': e.level || '',
+      'Task Type': e.taskType || '',
+      'Status': typeLabel(e.type),
+      'Progress': (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '',
+      'Last Update': isNaN(dt) ? e.dateTime : dt.toLocaleDateString(),
+      'Notes': e.notes || ''
+    };
+  });
+}
+
+document.getElementById('dashboardReportExcelBtn').onclick = () => {
+  const weekEnding = document.getElementById('weekEnding').value;
+  const rows = buildDashboardRows();
+  if(rows.length === 0){ alert('No log entries yet.'); return; }
+  downloadReportExcel(rows, `Delmond Planner ${weekEnding}.xlsx`, 'Planner',
+    [{ wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 45 }]);
+};
+
+document.getElementById('dashboardReportPdfBtn').onclick = () => {
+  const weekEnding = document.getElementById('weekEnding').value;
+  const rows = buildDashboardRows();
+  if(rows.length === 0){ alert('No log entries yet.'); return; }
+  downloadReportPdf('Delmond Site Log — Planner Report', 'Week ending ' + weekEnding, rows, `Delmond Planner ${weekEnding}.pdf`);
+};
+
 document.getElementById('weekEnding').addEventListener('change', renderDashboard);
 
 document.getElementById('entryDateTime').value = nowLocalDateTimeValue();
+
+const todayStr = nowLocalDateTimeValue().slice(0, 10);
+['logReportDate', 'tasksReportDate', 'teamReportDate', 'requestsReportDate'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.value = todayStr;
+});
 </script>
 
 </body>
