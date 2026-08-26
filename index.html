@@ -863,6 +863,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+  console.warn('Offline persistence not enabled:', err.code);
+});
 
 const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT4222lFHjzkkpq_sCf_gvrv_wU16BlQ5pE';
 const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
