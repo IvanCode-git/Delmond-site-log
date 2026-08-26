@@ -659,6 +659,10 @@
         <textarea id="taskMessage" placeholder="e.g. Clear debris from Level 3 stairwell before Friday"></textarea>
       </div>
       <div class="field">
+        <label>Notify by Email (optional)</label>
+        <input type="text" id="taskNotifyEmails" placeholder="e.g. client@example.com, pm@maincontractor.com">
+      </div>
+      <div class="field">
         <label>Photos (optional)</label>
         <input type="file" id="taskPhotoInput" accept="image/*" multiple capture="environment">
         <div class="photo-grid" id="taskPhotoPreview"></div>
@@ -942,22 +946,28 @@ const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT
 const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
 const EMAIL_WORKER_URL = NOTIFY_WORKER_URL + 'email';
 const VAL_EMAIL = 'VAL_EMAIL_PLACEHOLDER';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function sendSummaryEmailToVal(subject, bodyLines){
-  if(VAL_EMAIL === 'VAL_EMAIL_PLACEHOLDER') return;
+async function sendSummaryEmail(to, subject, bodyLines){
+  if(!to) return;
   try{
     await fetch(EMAIL_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        to: VAL_EMAIL,
+        to,
         subject,
         html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('')
       })
     });
   }catch(err){
-    console.warn('Could not send summary email', err);
+    console.warn('Could not send summary email to', to, err);
   }
+}
+
+async function sendSummaryEmailToVal(subject, bodyLines){
+  if(VAL_EMAIL === 'VAL_EMAIL_PLACEHOLDER') return;
+  return sendSummaryEmail(VAL_EMAIL, subject, bodyLines);
 }
 let messaging = null;
 try{
@@ -2859,6 +2869,13 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     alert('These photos are too large to sync. Please remove one and try again.');
     return;
   }
+  const notifyEmailsRaw = document.getElementById('taskNotifyEmails').value.trim();
+  const typedEmails = notifyEmailsRaw ? notifyEmailsRaw.split(',').map(e => e.trim()).filter(Boolean) : [];
+  const notifyEmails = typedEmails.filter(e => EMAIL_REGEX.test(e));
+  if(typedEmails.length !== notifyEmails.length){
+    alert('One or more of the notify emails don\'t look valid — check for typos and try again.');
+    return;
+  }
   const btn = document.getElementById('assignTaskBtn');
   btn.disabled = true;
   btn.textContent = 'Sending...';
@@ -2868,6 +2885,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
       photos,
       targetRole,
       targetUsername,
+      notifyEmails,
       assignedByName: currentSession.name,
       assignedByRole: currentSession.roleLabel,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2875,6 +2893,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
       comments: []
     });
     document.getElementById('taskMessage').value = '';
+    document.getElementById('taskNotifyEmails').value = '';
     currentTaskPhotos = [];
     renderTaskPhotoPreview();
     const notifyBody = message.slice(0, 120) || 'Open the app to see details';
@@ -2933,6 +2952,7 @@ function renderTasks(){
       <div class="entry-item">
         <div class="entry-detail open">
           <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) → ${escapeHtml(t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'])} &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
+          ${(t.notifyEmails && t.notifyEmails.length) ? `<div class="entry-tags">📧 Notifies on completion: ${escapeHtml(t.notifyEmails.join(', '))}</div>` : ''}
           <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
           ${photosHtml}
           <div class="entry-actions">
@@ -2970,14 +2990,28 @@ async function toggleTaskComplete(id, makeComplete){
     await db.collection('tasks').doc(id).update(update);
     if(makeComplete){
       const task = tasks.find(t => t.id === id);
-      sendSummaryEmailToVal(
-        `Task completed by ${currentSession.name}`,
-        [
-          `<strong>${escapeHtml(currentSession.name)}</strong> (${escapeHtml(currentSession.roleLabel)}) just marked a task as complete.`,
-          task ? `<strong>Task:</strong> ${escapeHtml(task.message || '')}` : '',
-          `<strong>Completed at:</strong> ${new Date().toLocaleString()}`
-        ]
-      );
+      if(task){
+        const start = task.createdAt && task.createdAt.toDate ? task.createdAt.toDate() : null;
+        const finish = new Date();
+        const durationMs = start ? Math.max(0, finish - start) : 0;
+        const targetLabel = task.targetUsername
+          ? ((workers.find(w => w.username === task.targetUsername) || {}).name || task.targetUsername)
+          : TARGET_ROLE_LABELS[task.targetRole || 'labourer'];
+        const lastComment = (task.comments || [])[task.comments.length - 1];
+        const subject = `Task completed: ${(task.message || 'Task').slice(0, 60)}`;
+        const lines = [
+          `<strong>Task:</strong> ${escapeHtml(task.message || '')}`,
+          `<strong>Assigned by:</strong> ${escapeHtml(task.assignedByName || '')}`,
+          `<strong>Assigned to:</strong> ${escapeHtml(targetLabel)}`,
+          `<strong>Started:</strong> ${start ? start.toLocaleString() : 'Unknown'}`,
+          `<strong>Finished:</strong> ${finish.toLocaleString()}`,
+          `<strong>Duration:</strong> ${formatDuration(durationMs)}`,
+          `<strong>Completed by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
+          lastComment ? `<strong>Latest update:</strong> ${escapeHtml(lastComment.text || '')}` : ''
+        ];
+        sendSummaryEmailToVal(subject, lines);
+        (task.notifyEmails || []).forEach(addr => sendSummaryEmail(addr, subject, lines));
+      }
     }
   }catch(err){
     alert('Failed to update task status: ' + err.message);
