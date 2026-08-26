@@ -727,6 +727,8 @@
 
   <div id="teamView" style="display:none;">
 
+  <div id="teamListWrap">
+
     <div class="card">
       <h2>Add a Worker</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Give each Labourer, Fixer, and Jointer their own login so their work is tracked individually.</p>
@@ -766,6 +768,16 @@
         <button data-trade="jointers">Jointers</button>
       </div>
       <div id="teamList"></div>
+    </div>
+
+  </div>
+
+    <div class="card" id="workerProfileCard" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <button type="button" class="secondary small" id="backToTeamBtn">← Back</button>
+        <h2 style="margin:0;" id="workerProfileTitle"></h2>
+      </div>
+      <div id="workerProfileContent"></div>
     </div>
 
   </div>
@@ -1072,7 +1084,7 @@ function showTab(tab){
   if(tab === 'requestEntry') renderRequests();
   if(tab === 'messages') resetMessagesView();
   if(tab === 'workingLocations') renderWorkingLocations();
-  if(tab === 'team') renderTeam();
+  if(tab === 'team') resetTeamView();
 }
 
 function applyRoleAccess(){
@@ -1542,6 +1554,7 @@ let workingLocations = [];
 let workers = [];
 let locationRequests = [];
 let activeTeamTradeFilter = 'all';
+let activeWorkerProfileUsername = null;
 const TRADE_LABELS = { labourer: 'Labourer', fixers: 'Fixer', jointers: 'Jointer' };
 let currentPhotos = [];
 let currentTaskPhotos = [];
@@ -3516,6 +3529,11 @@ function renderWorkerTaskHistory(username){
 }
 
 function renderTeam(){
+  if(activeWorkerProfileUsername){
+    renderWorkerProfile();
+    return;
+  }
+
   const list = document.getElementById('teamList');
   if(!list) return;
   const filtered = activeTeamTradeFilter === 'all' ? workers : workers.filter(w => w.trade === activeTeamTradeFilter);
@@ -3528,42 +3546,93 @@ function renderTeam(){
 
   list.innerHTML = sorted.map(w => {
     const activeLoc = workingLocations.find(l => l.workerUsername === w.username && l.active !== false);
-    const statusText = activeLoc ? `📍 Working at ${escapeHtml(activeLoc.level)}` : 'Not checked in';
-    const responseCount = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => c.authorUsername === w.username).length, 0);
-    const completedCount = tasks.filter(t => t.completed && t.completedByUsername === w.username).length;
+    const statusText = activeLoc ? `📍 ${escapeHtml(activeLoc.level)}` : 'Not checked in';
     const inactiveBadge = w.active === false ? '<span class="status-badge dismissed">Inactive</span>' : '';
 
     return `
-      <div class="entry-item">
-        <div class="entry-row" onclick="toggleTeamDetail('${w.username}')">
-          <span class="status-dot" style="background:${activeLoc ? 'var(--ok)' : '#9ca3af'};"></span>
-          <div class="entry-row-main">
-            <div class="entry-row-title">${escapeHtml(w.name)}${inactiveBadge}</div>
-            <div class="entry-row-sub">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusText}</div>
-          </div>
+      <div class="contact-row" onclick="openWorkerProfile('${w.username}')">
+        <div class="contact-avatar" style="background:${activeLoc ? '#1d4ed8' : '#9ca3af'};">${escapeHtml(w.name.charAt(0))}</div>
+        <div class="contact-info">
+          <div class="contact-name">${escapeHtml(w.name)}${inactiveBadge}</div>
+          <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusText}</div>
         </div>
-        <div class="entry-detail" id="team-detail-${w.username}">
-          <div class="entry-tags">${responseCount} task response(s) · ${completedCount} task(s) completed</div>
-          <div class="entry-actions">
-            <button type="button" class="secondary small" onclick="requestWorkerCheckIn('${w.username}')">📍 Request Check-In</button>
-            <button type="button" class="secondary small" onclick="toggleWorkerActive('${w.username}', ${w.active === false ? 'true' : 'false'})">${w.active === false ? '↩️ Reactivate' : '🚫 Deactivate'}</button>
-            <button type="button" class="danger small" onclick="removeWorker('${w.username}')">Remove</button>
-          </div>
-          <div class="section-label" style="margin-top:14px;">Location History</div>
-          <div class="comments-list">${renderWorkerLocationHistory(w.username)}</div>
-          <div class="section-label" style="margin-top:14px;">Task Activity</div>
-          <div class="comments-list">${renderWorkerTaskHistory(w.username)}</div>
-        </div>
+        <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
       </div>
     `;
   }).join('');
 }
 
-function toggleTeamDetail(username){
-  const el = document.getElementById('team-detail-' + username);
-  if(el) el.classList.toggle('open');
+function resetTeamView(){
+  activeWorkerProfileUsername = null;
+  document.getElementById('workerProfileCard').style.display = 'none';
+  document.getElementById('teamListWrap').style.display = 'block';
+  renderTeam();
 }
-window.toggleTeamDetail = toggleTeamDetail;
+
+function openWorkerProfile(username){
+  activeWorkerProfileUsername = username;
+  document.getElementById('teamListWrap').style.display = 'none';
+  document.getElementById('workerProfileCard').style.display = 'block';
+  renderWorkerProfile();
+}
+window.openWorkerProfile = openWorkerProfile;
+
+document.getElementById('backToTeamBtn').onclick = resetTeamView;
+
+function renderWorkerProfile(){
+  const content = document.getElementById('workerProfileContent');
+  if(!content || !activeWorkerProfileUsername) return;
+  const w = workers.find(x => x.username === activeWorkerProfileUsername);
+  if(!w){
+    resetTeamView();
+    return;
+  }
+  document.getElementById('workerProfileTitle').textContent = w.name;
+
+  const activeLoc = workingLocations.find(l => l.workerUsername === w.username && l.active !== false);
+  const statusHtml = activeLoc
+    ? `
+      <div class="location-card" style="margin-bottom:16px;">
+        <div class="location-meta" style="margin-bottom:6px; font-size:13px;">📍 Currently at <strong>${escapeHtml(activeLoc.level)}</strong></div>
+        ${activeLoc.description ? `<div class="location-description">${escapeHtml(activeLoc.description)}</div>` : '<div class="empty" style="padding:4px 0;">No description given.</div>'}
+      </div>
+    `
+    : `<div class="info-banner" style="background:#f3f4f6; border-color:var(--border); color:var(--muted);"><span>Not currently checked in.</span></div>`;
+
+  const responseCount = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => c.authorUsername === w.username).length, 0);
+  const completedCount = tasks.filter(t => t.completed && t.completedByUsername === w.username).length;
+
+  content.innerHTML = `
+    <div class="location-card-header" style="margin-bottom:16px;">
+      <div class="contact-avatar" style="width:52px; height:52px; font-size:20px; background:#1d4ed8;">${escapeHtml(w.name.charAt(0))}</div>
+      <div>
+        <div class="location-name" style="font-size:17px;">${escapeHtml(w.name)}</div>
+        <div class="location-meta">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)}${w.active === false ? ' · Inactive' : ''}</div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:0;">Right Now</div>
+    ${statusHtml}
+
+    <div class="stat-grid" style="margin-bottom:16px;">
+      <div class="stat-tile"><div class="label">Task Responses</div><div class="value">${responseCount}</div></div>
+      <div class="stat-tile"><div class="label">Tasks Completed</div><div class="value">${completedCount}</div></div>
+    </div>
+
+    <div class="entry-actions">
+      <button type="button" class="secondary" onclick="showTab('messages'); openConversation('${w.username}');">💬 Message</button>
+      <button type="button" class="secondary" onclick="requestWorkerCheckIn('${w.username}')">📍 Request Check-In</button>
+      <button type="button" class="secondary" onclick="toggleWorkerActive('${w.username}', ${w.active === false ? 'true' : 'false'})">${w.active === false ? '↩️ Reactivate' : '🚫 Deactivate'}</button>
+      <button type="button" class="danger" onclick="removeWorker('${w.username}')">Remove</button>
+    </div>
+
+    <div class="section-label">Location History</div>
+    <div class="comments-list">${renderWorkerLocationHistory(w.username)}</div>
+
+    <div class="section-label">Task Activity</div>
+    <div class="comments-list">${renderWorkerTaskHistory(w.username)}</div>
+  `;
+}
 
 async function toggleWorkerActive(username, makeActive){
   try{
