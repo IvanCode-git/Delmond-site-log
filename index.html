@@ -13,43 +13,49 @@
 <meta name="apple-mobile-web-app-title" content="Delmond Log">
 <style>
   :root{
-    --bg:#eef0f4; --card:#ffffff; --text:#1c2333; --muted:#6b7280;
-    --border:#dde1e8; --accent:#1f2a54; --accent-dark:#141a38;
-    --danger:#b3261e; --warn:#8a6d1e; --ok:#3a6b4a;
+    --bg:#f2f3f7; --card:#ffffff; --text:#161b2c; --muted:#667085;
+    --border:#e4e7ee; --accent:#1f2a54; --accent-dark:#141a38; --accent-light:#eef0f9;
+    --danger:#dc2626; --danger-bg:#fef2f2; --warn:#b45309; --warn-bg:#fffbeb; --ok:#16a34a; --ok-bg:#f0fdf4;
+    --radius:16px; --radius-sm:10px;
+    --shadow-sm:0 1px 3px rgba(16,24,40,.05);
+    --shadow-md:0 6px 20px rgba(16,24,40,.08);
   }
   *{box-sizing:border-box;}
   body{
     margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-    background:var(--bg); color:var(--text);
+    background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased;
   }
   header{
     background:var(--accent); color:#fff; padding:16px 20px;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+    position:sticky; top:0; z-index:150; box-shadow:0 2px 10px rgba(0,0,0,.15);
   }
-  header h1{margin:0; font-size:20px;}
-  .container{max-width:900px; margin:0 auto; padding:16px 16px 88px;}
+  header h1{margin:0; font-size:19px; font-weight:800; letter-spacing:-.01em;}
+  .container{max-width:900px; margin:0 auto; padding:18px 16px 92px;}
   .card{
-    background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:18px; margin-bottom:16px;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px; margin-bottom:16px; box-shadow:var(--shadow-sm);
   }
-  .card h2{margin:0 0 14px; font-size:16px; color:var(--text);}
+  .card h2{margin:0 0 14px; font-size:16px; font-weight:800; color:var(--text); letter-spacing:-.01em;}
   .row{display:flex; gap:16px; flex-wrap:wrap;}
-  .field{flex:1; min-width:150px; padding:10px 0 8px; border-bottom:1px solid var(--border);}
+  .field{flex:1; min-width:150px; padding:10px 0 8px; border-bottom:1.5px solid var(--border); transition:border-color .15s ease;}
+  .field:focus-within{border-bottom-color:var(--accent);}
   label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
   input[type=text], input[type=date], input[type=datetime-local], textarea, select{
-    width:100%; padding:3px 0; border:none; border-radius:0;
+    width:100%; padding:4px 0; border:none; border-radius:0;
     font-size:15px; font-family:inherit; background:transparent; color:var(--text);
   }
   input:focus, select:focus, textarea:focus{outline:none;}
   textarea{resize:vertical; min-height:60px;}
   button{
-    background:var(--accent); color:#fff; border:none; border-radius:6px;
-    padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600;
-    transition:background .15s ease, opacity .15s ease, transform .1s ease;
+    background:var(--accent); color:#fff; border:none; border-radius:10px;
+    padding:11px 16px; font-size:14px; cursor:pointer; font-weight:700;
+    transition:background .15s ease, opacity .15s ease, transform .1s ease, box-shadow .15s ease;
+    box-shadow:0 1px 2px rgba(16,24,40,.1);
   }
-  button:hover{background:var(--accent-dark);}
+  button:hover{background:var(--accent-dark); box-shadow:0 2px 8px rgba(16,24,40,.16);}
   button:active{transform:scale(.97);}
-  button:disabled{opacity:.55; cursor:default; transform:none;}
+  button:disabled{opacity:.5; cursor:default; transform:none; box-shadow:none;}
 
   .section-label{
     font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
@@ -68,28 +74,30 @@
     max-height:0; overflow:hidden; transition:max-height .28s ease, opacity .2s ease; opacity:0;
   }
   .collapsible-body.open{max-height:2600px; opacity:1;}
-  button.secondary{background:#fff; color:var(--accent); border:1px solid var(--accent);}
-  button.danger{background:#fff; color:var(--danger); border:1px solid var(--danger);}
-  button.small{padding:5px 10px; font-size:12px;}
+  button.secondary{background:#fff; color:var(--accent); border:1px solid var(--border); box-shadow:none;}
+  button.secondary:hover{background:var(--accent-light); border-color:var(--accent); box-shadow:none;}
+  button.danger{background:#fff; color:var(--danger); border:1px solid #fecaca; box-shadow:none;}
+  button.danger:hover{background:var(--danger-bg); box-shadow:none;}
+  button.small{padding:6px 12px; font-size:12px; border-radius:8px;}
   .photo-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
   .photo-grid .thumb{position:relative; width:90px; height:90px;}
-  .photo-grid img{width:90px; height:90px; object-fit:cover; border-radius:6px; border:1px solid var(--border);}
+  .photo-grid img{width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border);}
   .thumb .remove{
     position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff;
     border:none; border-radius:50%; width:20px; height:20px; font-size:12px; line-height:1;
-    cursor:pointer; padding:0;
+    cursor:pointer; padding:0; box-shadow:0 1px 3px rgba(0,0,0,.3);
   }
   .pill{
     display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;
     text-transform:uppercase; letter-spacing:.03em;
   }
-  .pill.ok{background:#dcfce7; color:var(--ok);}
-  .pill.warn{background:#fef3c7; color:var(--warn);}
-  .pill.danger{background:#fee2e2; color:var(--danger);}
+  .pill.ok{background:var(--ok-bg); color:var(--ok);}
+  .pill.warn{background:var(--warn-bg); color:var(--warn);}
+  .pill.danger{background:var(--danger-bg); color:var(--danger);}
   .entry-item{border-bottom:1px solid var(--border);}
   .entry-item:last-child{border-bottom:none;}
-  .entry-row{display:flex; align-items:flex-start; gap:10px; padding:12px 2px; cursor:pointer;}
-  .entry-row:hover{background:#f7f8fa;}
+  .entry-row{display:flex; align-items:flex-start; gap:10px; padding:12px 8px; margin:0 -8px; cursor:pointer; border-radius:10px; transition:background .12s ease;}
+  .entry-row:hover{background:var(--accent-light);}
   .status-dot{width:10px; height:10px; border-radius:50%; margin-top:5px; flex-shrink:0;}
   .entry-select{margin-top:4px; flex-shrink:0; width:16px; height:16px;}
   .bulk-pdf-bar{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; font-size:12px; color:var(--muted);}
@@ -98,14 +106,14 @@
   .entry-row-sub{font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .entry-row-date{font-size:11px; color:var(--muted); white-space:nowrap; flex-shrink:0; padding-top:2px;}
   .entry-detail{
-    max-height:0; overflow:hidden; opacity:0; padding:0 2px;
+    max-height:0; overflow:hidden; opacity:0; padding:0 8px;
     transition:max-height .28s ease, opacity .2s ease, padding .28s ease;
   }
-  .entry-detail.open{max-height:3000px; opacity:1; padding:0 2px 14px;}
-  .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:8px; margin-bottom:10px; cursor:pointer; display:block;}
+  .entry-detail.open{max-height:3000px; opacity:1; padding:0 8px 14px;}
+  .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:10px; margin-bottom:10px; cursor:pointer; display:block;}
   .entry-body{margin-top:8px; font-size:14px; white-space:pre-wrap;}
   .entry-photos{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
-  .entry-photos img{width:70px; height:70px; object-fit:cover; border-radius:6px; cursor:pointer;}
+  .entry-photos img{width:70px; height:70px; object-fit:cover; border-radius:8px; cursor:pointer;}
   audio{width:100%; margin-top:8px;}
   .rec-row{display:flex; align-items:center; gap:10px; margin-top:6px;}
   .rec-dot{width:10px; height:10px; border-radius:50%; background:var(--danger); display:none;}
@@ -114,55 +122,61 @@
   .empty{color:var(--muted); font-size:14px; text-align:center; padding:20px;}
   .progress-bar-outer{background:#e5e7eb; border-radius:999px; height:10px; overflow:hidden;}
   .progress-bar-inner{background:var(--accent); height:100%; transition:width .2s;}
-  .type-tag{font-size:11px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:5px; white-space:nowrap;}
+  .type-tag{font-size:11px; font-weight:700; text-transform:uppercase; padding:3px 9px; border-radius:6px; white-space:nowrap;}
   .type-progress{background:#dbeafe; color:#1d4ed8;}
   .type-issue{background:#fee2e2; color:#b91c1c;}
   .type-delay{background:#fef3c7; color:#b45309;}
   .type-damage{background:#fce7f3; color:#a21caf;}
   .filters{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;}
-  .filters button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:500;}
+  .filters button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:600; box-shadow:none;}
   .filters button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
   .entry-tags{font-size:12px; color:var(--muted); margin-top:4px;}
   footer{text-align:center; color:var(--muted); font-size:12px; padding:20px;}
 
   #lockScreen{
-    position:fixed; inset:0; background:var(--accent);
+    position:fixed; inset:0; background:linear-gradient(160deg, var(--accent), var(--accent-dark));
     display:flex; align-items:center; justify-content:center; z-index:1000;
   }
   .lock-box{
-    background:#fff; border-radius:12px; padding:32px 28px; width:280px;
-    text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25);
+    background:#fff; border-radius:20px; padding:36px 30px; width:300px;
+    text-align:center; box-shadow:0 25px 60px rgba(0,0,0,.35);
   }
-  .lock-box img{width:64px; height:64px; margin-bottom:12px;}
-  .lock-box h2{margin:0 0 4px; font-size:18px; color:var(--text);}
-  .lock-box p{margin:0 0 16px; font-size:12px; color:var(--muted);}
+  .lock-box img{width:60px; height:60px; margin-bottom:14px; border-radius:14px;}
+  .lock-box h2{margin:0 0 4px; font-size:20px; font-weight:800; color:var(--text); letter-spacing:-.01em;}
+  .lock-box p{margin:0 0 18px; font-size:12px; color:var(--muted);}
   .lock-box input{
     width:100%; text-align:center; font-size:16px;
-    padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;
+    padding:12px; border:1.5px solid var(--border); border-radius:10px; margin-bottom:12px;
+    transition:border-color .15s ease;
   }
-  #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px;}
+  .lock-box input:focus{border-color:var(--accent); outline:none;}
+  #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px; font-weight:600;}
   #lockScreen button{width:100%;}
   .header-actions{display:flex; align-items:center; gap:10px;}
-  .session-pill{font-size:12px; opacity:.9;}
-  .header-actions button{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); font-weight:500;}
-  .header-actions button:hover{background:rgba(255,255,255,.25);}
+  .session-pill{font-size:12px; opacity:.9; font-weight:600;}
+  .header-actions button{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); font-weight:600; box-shadow:none;}
+  .header-actions button:hover{background:rgba(255,255,255,.25); box-shadow:none;}
 
   .bottom-nav{
     position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--border);
     display:flex; z-index:200; padding-bottom:env(safe-area-inset-bottom, 0);
+    box-shadow:0 -4px 16px rgba(16,24,40,.06);
   }
   .bottom-nav button{
-    flex:1; background:#fff; color:var(--muted); border:none; border-radius:0;
-    padding:8px 4px 6px; font-size:11px; font-weight:600;
-    display:flex; flex-direction:column; align-items:center; gap:2px;
+    flex:1; background:transparent; color:var(--muted); border:none; border-radius:0;
+    padding:9px 4px 8px; font-size:10.5px; font-weight:700;
+    display:flex; flex-direction:column; align-items:center; gap:3px; box-shadow:none;
   }
-  .bottom-nav button .nav-icon{font-size:19px; line-height:1;}
+  .bottom-nav button:hover{background:transparent; box-shadow:none;}
+  .bottom-nav button:active{transform:none;}
+  .bottom-nav button .nav-icon{font-size:19px; line-height:1; transition:transform .15s ease;}
   .bottom-nav button.active{color:var(--accent);}
+  .bottom-nav button.active .nav-icon{transform:translateY(-1px);}
 
   .stat-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px;}
-  .stat-tile{background:#f7f8fa; border:1px solid var(--border); border-radius:8px; padding:10px 12px;}
+  .stat-tile{background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;}
   .stat-tile .label{font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.03em;}
-  .stat-tile .value{font-size:22px; font-weight:700; color:var(--accent); margin-top:2px;}
+  .stat-tile .value{font-size:24px; font-weight:800; color:var(--accent); margin-top:2px; letter-spacing:-.02em;}
 
   .bar-row{display:grid; grid-template-columns:90px 1fr 44px; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;}
   .bar-track{background:#e5e7eb; border-radius:999px; height:12px; overflow:hidden;}
@@ -179,7 +193,7 @@
   .planner-table th{font-size:11px; text-transform:uppercase; color:var(--muted); font-weight:700;}
 
   .plan-box{
-    position:relative; width:100%; aspect-ratio:4/3; border:1px solid var(--border); border-radius:8px;
+    position:relative; width:100%; aspect-ratio:4/3; border:1px solid var(--border); border-radius:var(--radius-sm);
     background:
       repeating-linear-gradient(0deg, #f4f5f7, #f4f5f7 19px, #e6e8ec 19px, #e6e8ec 20px),
       repeating-linear-gradient(90deg, #f4f5f7, #f4f5f7 19px, #e6e8ec 19px, #e6e8ec 20px);
@@ -211,15 +225,15 @@
   .comment-item:last-child{border-bottom:none;}
   .comment-meta{font-size:11px; color:var(--muted); margin-top:2px;}
   .completed-badge{
-    display:inline-block; background:#dcfce7; color:var(--ok); font-size:10px; font-weight:800;
+    display:inline-block; background:var(--ok-bg); color:var(--ok); font-size:10px; font-weight:800;
     text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-left:6px; letter-spacing:.03em;
   }
   .status-badge{
     display:inline-block; font-size:10px; font-weight:800;
     text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-left:6px; letter-spacing:.03em;
   }
-  .status-badge.pending{background:#fef3c7; color:#b45309;}
-  .status-badge.accepted{background:#dcfce7; color:var(--ok);}
+  .status-badge.pending{background:var(--warn-bg); color:var(--warn);}
+  .status-badge.accepted{background:var(--ok-bg); color:var(--ok);}
   .status-badge.dismissed{background:#f3f4f6; color:var(--muted);}
 
   .nav-badge{
@@ -227,11 +241,11 @@
     border-radius:999px; min-width:16px; height:16px; line-height:16px; text-align:center;
     padding:0 4px; margin-left:3px; vertical-align:top; display:inline-block;
   }
-  .contact-row{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer;}
-  .contact-row:last-child{border-bottom:none;}
+  .contact-row{display:flex; align-items:center; gap:10px; padding:10px 8px; margin:0 -8px; border-radius:10px; cursor:pointer; transition:background .12s ease;}
+  .contact-row:hover{background:var(--accent-light);}
   .contact-avatar{
-    width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff;
-    display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;
+    width:40px; height:40px; border-radius:50%; background:var(--accent); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; font-size:15px;
   }
   .contact-info{flex:1; min-width:0;}
   .contact-name{font-weight:700; font-size:14px;}
@@ -241,15 +255,21 @@
     display:inline-block; background:var(--danger); color:#fff; font-size:11px; font-weight:800;
     border-radius:999px; min-width:18px; height:18px; line-height:18px; text-align:center; padding:0 5px; margin-top:4px;
   }
-  .msg-row{padding:8px 12px; border-radius:12px; margin-bottom:8px; font-size:14px; max-width:80%; word-wrap:break-word;}
-  .msg-row.mine{background:var(--accent); color:#fff; margin-left:auto; border-bottom-right-radius:2px;}
-  .msg-row.theirs{background:#f4f5f7; color:var(--text); margin-right:auto; border-bottom-left-radius:2px;}
+  .msg-row{padding:9px 13px; border-radius:16px; margin-bottom:8px; font-size:14px; max-width:80%; word-wrap:break-word;}
+  .msg-row.mine{background:var(--accent); color:#fff; margin-left:auto; border-bottom-right-radius:4px; box-shadow:var(--shadow-sm);}
+  .msg-row.theirs{background:#fff; border:1px solid var(--border); color:var(--text); margin-right:auto; border-bottom-left-radius:4px;}
   .msg-meta{font-size:10px; opacity:.75; margin-top:3px;}
-  .comment-input{
-    flex:1; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:14px;
+  .info-banner{
+    background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:var(--radius-sm);
+    padding:10px 12px; font-size:13px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
   }
+  .comment-input{
+    flex:1; border:1.5px solid var(--border); border-radius:10px; padding:9px 12px; font-size:14px;
+    transition:border-color .15s ease;
+  }
+  .comment-input:focus{outline:none; border-color:var(--accent);}
   .status-toggle{display:flex; gap:6px; margin-bottom:10px;}
-  .status-toggle button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:600;}
+  .status-toggle button{background:#fff; color:var(--text); border:1px solid var(--border); font-weight:600; box-shadow:none;}
   .status-toggle button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
 
   .type-chip{
@@ -258,7 +278,7 @@
   }
   .type-chip .remove-type{
     background:rgba(255,255,255,.3); border:none; color:#fff; border-radius:50%; width:18px; height:18px;
-    font-size:12px; line-height:1; cursor:pointer; padding:0;
+    font-size:12px; line-height:1; cursor:pointer; padding:0; box-shadow:none;
   }
 
   .level-row{
@@ -266,15 +286,15 @@
   }
   .level-row:last-child{border-bottom:none;}
   .level-thumb{
-    width:44px; height:33px; border-radius:6px; border:1px solid var(--border); flex-shrink:0;
+    width:44px; height:33px; border-radius:8px; border:1px solid var(--border); flex-shrink:0;
     background-size:cover; background-position:center; background-color:#f4f5f7;
     display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--muted); text-align:center; overflow:hidden;
   }
   .level-row-name{flex:1; font-size:13px; font-weight:600; min-width:0;}
   .level-row-actions{display:flex; align-items:center; gap:6px; flex-shrink:0;}
   .level-upload-label{
-    background:#fff; color:var(--accent); border:1px solid var(--accent); border-radius:6px;
-    padding:5px 10px; font-size:12px; font-weight:600; cursor:pointer;
+    background:#fff; color:var(--accent); border:1px solid var(--accent); border-radius:8px;
+    padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer;
   }
   .level-upload-label input{display:none;}
 </style>
@@ -559,6 +579,12 @@
         </select>
       </div>
       <div class="field">
+        <label>Specific Person (optional)</label>
+        <select id="taskTargetWorker">
+          <option value="">Whole trade</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Message</label>
         <textarea id="taskMessage" placeholder="e.g. Clear debris from Level 3 stairwell before Friday"></textarea>
       </div>
@@ -634,6 +660,7 @@
     <div class="card" id="submitLocationCard">
       <h2>Working Locations</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Let the team know where you're working right now.</p>
+      <div id="locationRequestBanner" style="display:none;"></div>
       <div class="field">
         <label>Level</label>
         <select id="locationLevel"></select>
@@ -659,6 +686,51 @@
       <h2>On Site Now</h2>
       <div id="workingLocationsSummary" class="stat-grid" style="margin-bottom:14px;"></div>
       <div id="workingLocationsList"></div>
+    </div>
+
+  </div>
+
+  <div id="teamView" style="display:none;">
+
+    <div class="card">
+      <h2>Add a Worker</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Give each Labourer, Fixer, and Jointer their own login so their work is tracked individually.</p>
+      <div class="row">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="workerName" placeholder="e.g. John Smith">
+        </div>
+        <div class="field">
+          <label>Trade</label>
+          <select id="workerTrade">
+            <option value="labourer">Labourer</option>
+            <option value="fixers">Fixer</option>
+            <option value="jointers">Jointer</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="workerUsername" placeholder="e.g. jsmith" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="text" id="workerPassword" placeholder="e.g. a 4-digit code">
+        </div>
+      </div>
+      <button type="button" id="addWorkerBtn">Add Worker</button>
+    </div>
+
+    <div class="card">
+      <h2>Team Overview</h2>
+      <div class="status-toggle" id="teamTradeFilters">
+        <button data-trade="all" class="active">All</button>
+        <button data-trade="labourer">Labourers</button>
+        <button data-trade="fixers">Fixers</button>
+        <button data-trade="jointers">Jointers</button>
+      </div>
+      <div id="teamList"></div>
     </div>
 
   </div>
@@ -692,9 +764,10 @@
   <button data-tab="log" data-roles="pm,supervisor,engineer" class="active"><span class="nav-icon">📋</span>Log</button>
   <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">✅</span>Tasks</button>
   <button data-tab="requests" data-roles="pm,supervisor,engineer"><span class="nav-icon">📥</span>Requests</button>
+  <button data-tab="team" data-roles="pm,supervisor,engineer"><span class="nav-icon">👷</span>Team</button>
   <button data-tab="dashboard" data-roles="pm,supervisor,engineer"><span class="nav-icon">📊</span>Dashboard</button>
   <button data-tab="requestEntry" data-roles="labourer,fixers,jointers"><span class="nav-icon">✍️</span>Request Entry</button>
-  <button data-tab="workingLocations" data-roles="pm,supervisor,engineer,fixers,jointers"><span class="nav-icon">📍</span>Locations</button>
+  <button data-tab="workingLocations" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">📍</span>Locations</button>
   <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">💬</span>Messages<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
 </nav>
 
@@ -927,7 +1000,7 @@ async function sendPushNotificationToUser(username, title, body){
   }
 }
 
-const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', workingLocations: 'workingLocationsView', messages: 'messagesView' };
+const VIEW_IDS = { log: 'logView', tasks: 'tasksView', requests: 'requestsView', dashboard: 'dashboardView', requestEntry: 'requestEntryView', workingLocations: 'workingLocationsView', team: 'teamView', messages: 'messagesView' };
 
 function hideAllAppUI(){
   Object.values(VIEW_IDS).forEach(id => { document.getElementById(id).style.display = 'none'; });
@@ -948,6 +1021,7 @@ function showTab(tab){
   if(tab === 'requestEntry') renderRequests();
   if(tab === 'messages') resetMessagesView();
   if(tab === 'workingLocations') renderWorkingLocations();
+  if(tab === 'team') renderTeam();
 }
 
 function applyRoleAccess(){
@@ -968,8 +1042,17 @@ function attemptUnlock(){
   const username = document.getElementById('usernameInput').value.trim().toLowerCase();
   const password = document.getElementById('passwordInput').value.trim();
   const user = USERS[username];
+  const worker = workers.find(w => w.username === username && w.active !== false);
+
+  let matched = null;
   if(user && password === user.password){
-    currentSession = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
+    matched = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
+  } else if(worker && password === worker.password){
+    matched = { username: worker.username, role: worker.trade, name: worker.name, roleLabel: TRADE_LABELS[worker.trade] || worker.trade };
+  }
+
+  if(matched){
+    currentSession = matched;
     applySession();
     applyRoleAccess();
     updateNotifyButton();
@@ -1405,6 +1488,10 @@ let entryRequests = [];
 let messages = [];
 let activeConversationUsername = null;
 let workingLocations = [];
+let workers = [];
+let locationRequests = [];
+let activeTeamTradeFilter = 'all';
+const TRADE_LABELS = { labourer: 'Labourer', fixers: 'Fixer', jointers: 'Jointer' };
 let currentPhotos = [];
 let currentTaskPhotos = [];
 let currentRequestPhotos = [];
@@ -1447,6 +1534,8 @@ function attachFirestoreListeners(retriesLeft){
   let requestsUnsub = null;
   let messagesUnsub = null;
   let workingLocationsUnsub = null;
+  let workersUnsub = null;
+  let locationRequestsUnsub = null;
 
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
@@ -1460,6 +1549,8 @@ function attachFirestoreListeners(retriesLeft){
     if(requestsUnsub) requestsUnsub();
     if(messagesUnsub) messagesUnsub();
     if(workingLocationsUnsub) workingLocationsUnsub();
+    if(workersUnsub) workersUnsub();
+    if(locationRequestsUnsub) locationRequestsUnsub();
     if(retriesLeft > 0){
       setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
     } else {
@@ -1528,6 +1619,19 @@ function attachFirestoreListeners(retriesLeft){
 
   workingLocationsUnsub = db.collection('workingLocations').onSnapshot((snapshot) => {
     workingLocations = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderWorkingLocations();
+    renderTeam();
+  }, handleSyncError);
+
+  workersUnsub = db.collection('workers').onSnapshot((snapshot) => {
+    workers = snapshot.docs.map((doc) => ({ id: doc.id, username: doc.id, ...doc.data() }));
+    renderTeam();
+    renderTasks();
+    renderMessages();
+  }, handleSyncError);
+
+  locationRequestsUnsub = db.collection('locationRequests').onSnapshot((snapshot) => {
+    locationRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderWorkingLocations();
   }, handleSyncError);
 }
@@ -2558,8 +2662,22 @@ document.getElementById('taskStatusFilters').addEventListener('click', (ev) => {
 
 const TARGET_ROLE_LABELS = { labourer: 'Labourers', fixers: 'Fixers', jointers: 'Jointers' };
 
+function populateTaskTargetWorkerSelect(){
+  const roleSel = document.getElementById('taskTargetRole');
+  const workerSel = document.getElementById('taskTargetWorker');
+  const trade = roleSel.value;
+  const prevValue = workerSel.value;
+  const tradeWorkers = workers.filter(w => w.trade === trade && w.active !== false).sort((a, b) => a.name.localeCompare(b.name));
+  workerSel.innerHTML = '<option value="">Whole trade</option>' +
+    tradeWorkers.map(w => `<option value="${w.username}">${escapeHtml(w.name)}</option>`).join('');
+  if(tradeWorkers.some(w => w.username === prevValue)) workerSel.value = prevValue;
+}
+document.getElementById('taskTargetRole').addEventListener('change', populateTaskTargetWorkerSelect);
+populateTaskTargetWorkerSelect();
+
 document.getElementById('assignTaskBtn').onclick = async () => {
   const targetRole = document.getElementById('taskTargetRole').value;
+  const targetUsername = document.getElementById('taskTargetWorker').value || null;
   const message = document.getElementById('taskMessage').value.trim();
   const photos = currentTaskPhotos.map(p => p.preview);
   if(!message && photos.length === 0){
@@ -2579,6 +2697,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
       message,
       photos,
       targetRole,
+      targetUsername,
       assignedByName: currentSession.name,
       assignedByRole: currentSession.roleLabel,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2588,7 +2707,12 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     document.getElementById('taskMessage').value = '';
     currentTaskPhotos = [];
     renderTaskPhotoPreview();
-    sendPushNotification([targetRole], `New task from ${currentSession.name}`, message.slice(0, 120) || 'Open the app to see details');
+    const notifyBody = message.slice(0, 120) || 'Open the app to see details';
+    if(targetUsername){
+      sendPushNotificationToUser(targetUsername, `New task from ${currentSession.name}`, notifyBody);
+    } else {
+      sendPushNotification([targetRole], `New task from ${currentSession.name}`, notifyBody);
+    }
   }catch(err){
     alert('Failed to send task: ' + err.message);
   }finally{
@@ -2600,10 +2724,14 @@ document.getElementById('assignTaskBtn').onclick = async () => {
 function renderTasks(){
   const assignCard = document.getElementById('assignTaskCard');
   if(assignCard) assignCard.style.display = isManagement() ? 'block' : 'none';
+  if(isManagement()) populateTaskTargetWorkerSelect();
 
   const list = document.getElementById('tasksList');
   if(!list) return;
-  const myTasks = isManagement() ? tasks : (currentSession ? tasks.filter(t => (t.targetRole || 'labourer') === currentSession.role) : []);
+  const myTasks = isManagement() ? tasks : (currentSession ? tasks.filter(t => {
+    if((t.targetRole || 'labourer') !== currentSession.role) return false;
+    return !t.targetUsername || t.targetUsername === currentSession.username;
+  }) : []);
   const filtered = myTasks.filter(t => activeTaskStatusFilter === 'completed' ? t.completed === true : t.completed !== true);
   const sorted = [...filtered].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
 
@@ -2632,7 +2760,7 @@ function renderTasks(){
     return `
       <div class="entry-item">
         <div class="entry-detail open">
-          <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) → ${escapeHtml(TARGET_ROLE_LABELS[t.targetRole || 'labourer'])} &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
+          <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) → ${escapeHtml(t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'])} &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
           <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
           ${photosHtml}
           <div class="entry-actions">
@@ -2657,7 +2785,17 @@ function tsOf(ts){
 
 async function toggleTaskComplete(id, makeComplete){
   try{
-    await db.collection('tasks').doc(id).update({ completed: makeComplete });
+    const update = { completed: makeComplete };
+    if(makeComplete){
+      update.completedByName = currentSession.name;
+      update.completedByUsername = currentSession.username;
+      update.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+    } else {
+      update.completedByName = null;
+      update.completedByUsername = null;
+      update.completedAt = null;
+    }
+    await db.collection('tasks').doc(id).update(update);
   }catch(err){
     alert('Failed to update task status: ' + err.message);
   }
@@ -2673,6 +2811,7 @@ async function sendTaskResponse(id, photoDataUrl){
       text,
       photo: photoDataUrl || null,
       author: currentSession ? currentSession.name : '',
+      authorUsername: currentSession ? currentSession.username : '',
       role: currentSession ? currentSession.roleLabel : '',
       dateTime: new Date().toISOString()
     };
@@ -2681,8 +2820,15 @@ async function sendTaskResponse(id, photoDataUrl){
     });
     if(input) input.value = '';
     const task = tasks.find(x => x.id === id);
-    const targetRoles = isManagement() ? [(task && task.targetRole) || 'labourer'] : ['pm', 'supervisor', 'engineer'];
-    sendPushNotification(targetRoles, `${currentSession.name} responded to a task`, text || '📷 Photo attached');
+    if(isManagement()){
+      if(task && task.targetUsername){
+        sendPushNotificationToUser(task.targetUsername, `${currentSession.name} responded to a task`, text || '📷 Photo attached');
+      } else {
+        sendPushNotification([(task && task.targetRole) || 'labourer'], `${currentSession.name} responded to a task`, text || '📷 Photo attached');
+      }
+    } else {
+      sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} responded to a task`, text || '📷 Photo attached');
+    }
   }catch(err){
     alert('Failed to send response: ' + err.message);
   }
@@ -2869,12 +3015,25 @@ function updateMessagesNavBadge(){
   }
 }
 
+function getContactInfo(username){
+  if(USERS[username]) return USERS[username];
+  const w = workers.find(x => x.username === username);
+  if(w) return { name: w.name, roleLabel: TRADE_LABELS[w.trade] || w.trade, role: w.trade };
+  return { name: username, roleLabel: '' };
+}
+
+function allContactUsernames(){
+  const staticUsernames = Object.keys(USERS);
+  const workerUsernames = workers.filter(w => w.active !== false).map(w => w.username);
+  return [...staticUsernames, ...workerUsernames].filter(u => u !== currentSession.username);
+}
+
 function renderMessagesContactList(){
   const list = document.getElementById('messagesContactList');
   if(!list || !currentSession) return;
-  const contacts = Object.keys(USERS).filter(u => u !== currentSession.username);
+  const contacts = allContactUsernames();
   list.innerHTML = contacts.map(username => {
-    const info = USERS[username];
+    const info = getContactInfo(username);
     const convId = getConversationId(currentSession.username, username);
     const convMessages = messages.filter(m => m.conversationId === convId).sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
     const last = convMessages[convMessages.length - 1];
@@ -2919,7 +3078,8 @@ function renderMessageThread(){
 
 function openConversation(username){
   activeConversationUsername = username;
-  document.getElementById('messageThreadTitle').textContent = `${USERS[username].name} (${USERS[username].roleLabel})`;
+  const info = getContactInfo(username);
+  document.getElementById('messageThreadTitle').textContent = `${info.name} (${info.roleLabel})`;
   document.getElementById('messagesContactsCard').style.display = 'none';
   document.getElementById('messagesThreadCard').style.display = 'block';
   renderMessageThread();
@@ -2972,6 +3132,11 @@ document.getElementById('messageInput').addEventListener('keydown', (ev) => {
 
 // ---- Working Locations (Fixers/Jointers check in, management sees the board) ----
 
+function myPendingLocationRequests(){
+  if(!currentSession) return [];
+  return locationRequests.filter(r => !r.fulfilled && (r.targetUsername === currentSession.username || r.targetTrade === currentSession.role));
+}
+
 document.getElementById('submitLocationBtn').onclick = async () => {
   const level = document.getElementById('locationLevel').value;
   if(!level){
@@ -2984,11 +3149,20 @@ document.getElementById('submitLocationBtn').onclick = async () => {
     await db.collection('workingLocations').add({
       trade: currentSession.role,
       tradeLabel: currentSession.roleLabel,
+      workerUsername: currentSession.username,
+      workerName: currentSession.name,
       level,
       areaMarker: currentLocationMarker,
+      active: true,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.roleLabel} checked in`, `Working at ${level}`);
+    sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} checked in`, `Working at ${level}`);
+    const pending = myPendingLocationRequests();
+    if(pending.length){
+      const batch = db.batch();
+      pending.forEach(r => batch.update(db.collection('locationRequests').doc(r.id), { fulfilled: true }));
+      await batch.commit();
+    }
     document.getElementById('locationLevel').value = '';
     document.getElementById('locationPlanWrap').style.display = 'none';
     clearLocationMarker();
@@ -3001,21 +3175,41 @@ document.getElementById('submitLocationBtn').onclick = async () => {
 
 function renderWorkingLocations(){
   const submitCard = document.getElementById('submitLocationCard');
-  if(submitCard) submitCard.style.display = isFieldTrade() ? 'block' : 'none';
+  if(submitCard) submitCard.style.display = (isFieldTrade() || isLabourer()) ? 'block' : 'none';
+
+  const banner = document.getElementById('locationRequestBanner');
+  if(banner){
+    const pending = myPendingLocationRequests();
+    if(pending.length){
+      const latest = pending[pending.length - 1];
+      banner.style.display = 'flex';
+      banner.className = 'info-banner';
+      banner.innerHTML = `<span>📍 <strong>${escapeHtml(latest.requestedByName)}</strong> asked you to check in — pick a level and drop a pin below.</span>`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  const activeLocations = workingLocations.filter(l => l.active !== false);
 
   const summary = document.getElementById('workingLocationsSummary');
   if(summary){
-    const fixersCount = workingLocations.filter(l => l.trade === 'fixers').length;
-    const jointersCount = workingLocations.filter(l => l.trade === 'jointers').length;
+    const labourerCount = activeLocations.filter(l => l.trade === 'labourer').length;
+    const fixersCount = activeLocations.filter(l => l.trade === 'fixers').length;
+    const jointersCount = activeLocations.filter(l => l.trade === 'jointers').length;
+    const requestBtn = (trade, label) => isManagement()
+      ? `<button type="button" class="secondary small" style="margin-top:6px;" onclick="requestTradeCheckIn('${trade}')">📍 Request check-in</button>`
+      : '';
     summary.innerHTML = `
-      <div class="stat-tile"><div class="label">Fixers on site</div><div class="value">${fixersCount}</div></div>
-      <div class="stat-tile"><div class="label">Jointers on site</div><div class="value">${jointersCount}</div></div>
+      <div class="stat-tile"><div class="label">Labourers on site</div><div class="value">${labourerCount}</div>${requestBtn('labourer')}</div>
+      <div class="stat-tile"><div class="label">Fixers on site</div><div class="value">${fixersCount}</div>${requestBtn('fixers')}</div>
+      <div class="stat-tile"><div class="label">Jointers on site</div><div class="value">${jointersCount}</div>${requestBtn('jointers')}</div>
     `;
   }
 
   const list = document.getElementById('workingLocationsList');
   if(!list) return;
-  const sorted = [...workingLocations].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
+  const sorted = [...activeLocations].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
   if(sorted.length === 0){
     list.innerHTML = '<div class="empty">No one is currently checked in.</div>';
     return;
@@ -3033,7 +3227,10 @@ function renderWorkingLocations(){
         <span>📍 Pin at ${loc.areaMarker.x}%, ${loc.areaMarker.y}% on ${escapeHtml(loc.level)} plan</span>
       </div>
     ` : '';
-    const canFinish = currentSession && currentSession.role === loc.trade;
+    const whoLabel = loc.workerName && loc.workerName !== loc.tradeLabel
+      ? `${escapeHtml(loc.workerName)} · ${escapeHtml(loc.tradeLabel)}`
+      : escapeHtml(loc.tradeLabel);
+    const canFinish = currentSession && currentSession.username === loc.workerUsername;
     const canSendPdf = isManagement();
     const actionsHtml = (canFinish || canSendPdf) ? `
       <div class="entry-actions">
@@ -3045,7 +3242,7 @@ function renderWorkingLocations(){
     return `
       <div class="entry-item">
         <div class="entry-detail open">
-          <div class="entry-tags"><span class="type-tag" style="background:#e0e7ff; color:#1d4ed8;">${escapeHtml(loc.tradeLabel)}</span> &nbsp;Level: ${escapeHtml(loc.level)} &nbsp;${time}</div>
+          <div class="entry-tags"><span class="type-tag" style="background:#e0e7ff; color:#1d4ed8;">${whoLabel}</span> &nbsp;Level: ${escapeHtml(loc.level)} &nbsp;${time}</div>
           ${markerHtml}
           ${actionsHtml}
         </div>
@@ -3056,12 +3253,47 @@ function renderWorkingLocations(){
 
 async function finishLocation(id){
   try{
-    await db.collection('workingLocations').doc(id).delete();
+    await db.collection('workingLocations').doc(id).update({
+      active: false,
+      finishedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
   }catch(err){
     alert('Failed to clear that check-in: ' + err.message);
   }
 }
 window.finishLocation = finishLocation;
+
+async function requestTradeCheckIn(trade){
+  try{
+    await db.collection('locationRequests').add({
+      targetTrade: trade,
+      requestedByName: currentSession.name,
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      fulfilled: false
+    });
+    sendPushNotification([trade], 'Check-in requested', `${currentSession.name} asked the team to check in.`);
+    alert(`Check-in request sent to all ${TARGET_ROLE_LABELS[trade]}.`);
+  }catch(err){
+    alert('Failed to send request: ' + err.message);
+  }
+}
+window.requestTradeCheckIn = requestTradeCheckIn;
+
+async function requestWorkerCheckIn(username){
+  try{
+    await db.collection('locationRequests').add({
+      targetUsername: username,
+      requestedByName: currentSession.name,
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      fulfilled: false
+    });
+    sendPushNotificationToUser(username, 'Check-in requested', `${currentSession.name} asked where you're working right now.`);
+    alert('Check-in request sent.');
+  }catch(err){
+    alert('Failed to send request: ' + err.message);
+  }
+}
+window.requestWorkerCheckIn = requestWorkerCheckIn;
 
 async function sendPdfToLocation(locationId, inputEl){
   const file = inputEl.files[0];
@@ -3069,6 +3301,7 @@ async function sendPdfToLocation(locationId, inputEl){
   if(!file) return;
   const loc = workingLocations.find(l => l.id === locationId);
   if(!loc) return;
+  const isIndividual = loc.workerUsername && loc.workerUsername !== loc.trade;
   try{
     const canvas = await renderPdfFirstPageToCanvas(file);
     const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
@@ -3076,19 +3309,171 @@ async function sendPdfToLocation(locationId, inputEl){
       message: `Drawing/document for ${loc.level}`,
       photos: [dataUrl],
       targetRole: loc.trade,
+      targetUsername: isIndividual ? loc.workerUsername : null,
       assignedByName: currentSession.name,
       assignedByRole: currentSession.roleLabel,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       completed: false,
       comments: []
     });
-    sendPushNotification([loc.trade], `PDF from ${currentSession.name}`, `Drawing/document for ${loc.level} — check Tasks.`);
+    if(isIndividual){
+      sendPushNotificationToUser(loc.workerUsername, `PDF from ${currentSession.name}`, `Drawing/document for ${loc.level} — check Tasks.`);
+    } else {
+      sendPushNotification([loc.trade], `PDF from ${currentSession.name}`, `Drawing/document for ${loc.level} — check Tasks.`);
+    }
     alert('Sent — they\'ll find it under Tasks. Note: only the first page of the PDF is sent.');
   }catch(err){
     alert('Could not send that PDF: ' + err.message);
   }
 }
 window.sendPdfToLocation = sendPdfToLocation;
+
+// ---- Team (individual worker accounts, oversight, and history) ----
+
+document.getElementById('addWorkerBtn').onclick = async () => {
+  const name = document.getElementById('workerName').value.trim();
+  const trade = document.getElementById('workerTrade').value;
+  const username = document.getElementById('workerUsername').value.trim().toLowerCase();
+  const password = document.getElementById('workerPassword').value.trim();
+
+  if(!name || !username || !password){
+    alert('Fill in a name, username, and password.');
+    return;
+  }
+  if(USERS[username] || workers.some(w => w.username === username)){
+    alert('That username is already taken — choose another.');
+    return;
+  }
+
+  const btn = document.getElementById('addWorkerBtn');
+  btn.disabled = true;
+  try{
+    await db.collection('workers').doc(username).set({
+      name,
+      trade,
+      username,
+      password,
+      active: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentSession.name
+    });
+    document.getElementById('workerName').value = '';
+    document.getElementById('workerUsername').value = '';
+    document.getElementById('workerPassword').value = '';
+  }catch(err){
+    alert('Failed to add worker: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('teamTradeFilters').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-trade]');
+  if(!btn) return;
+  activeTeamTradeFilter = btn.dataset.trade;
+  document.querySelectorAll('#teamTradeFilters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTeam();
+});
+
+function renderWorkerLocationHistory(username){
+  const history = workingLocations
+    .filter(l => l.workerUsername === username)
+    .sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt))
+    .slice(0, 15);
+  if(history.length === 0) return '<div class="empty" style="padding:6px 0;">No check-ins yet.</div>';
+  return history.map(l => {
+    const start = (l.createdAt && l.createdAt.toDate) ? l.createdAt.toDate().toLocaleString() : '';
+    const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate().toLocaleString() : (l.active === false ? '' : 'Still checked in');
+    return `<div class="comment-item"><div>${escapeHtml(l.level)}</div><div class="comment-meta">${start}${end ? ' → ' + end : ''}</div></div>`;
+  }).join('');
+}
+
+function renderWorkerTaskHistory(username){
+  const responses = [];
+  tasks.forEach(t => {
+    (t.comments || []).forEach(c => {
+      if(c.authorUsername === username) responses.push({ taskMessage: t.message, ...c });
+    });
+  });
+  responses.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+  if(responses.length === 0) return '<div class="empty" style="padding:6px 0;">No task responses yet.</div>';
+  return responses.slice(0, 15).map(r => `
+    <div class="comment-item">
+      <div>${r.text ? escapeHtml(r.text) : '<em>Photo response</em>'}</div>
+      <div class="comment-meta">on "${escapeHtml(r.taskMessage || 'a task')}" · ${isNaN(new Date(r.dateTime)) ? r.dateTime : new Date(r.dateTime).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function renderTeam(){
+  const list = document.getElementById('teamList');
+  if(!list) return;
+  const filtered = activeTeamTradeFilter === 'all' ? workers : workers.filter(w => w.trade === activeTeamTradeFilter);
+  const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+
+  if(sorted.length === 0){
+    list.innerHTML = '<div class="empty">No workers added yet — use the form above to add your first one.</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(w => {
+    const activeLoc = workingLocations.find(l => l.workerUsername === w.username && l.active !== false);
+    const statusText = activeLoc ? `📍 Working at ${escapeHtml(activeLoc.level)}` : 'Not checked in';
+    const responseCount = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => c.authorUsername === w.username).length, 0);
+    const completedCount = tasks.filter(t => t.completed && t.completedByUsername === w.username).length;
+    const inactiveBadge = w.active === false ? '<span class="status-badge dismissed">Inactive</span>' : '';
+
+    return `
+      <div class="entry-item">
+        <div class="entry-row" onclick="toggleTeamDetail('${w.username}')">
+          <span class="status-dot" style="background:${activeLoc ? 'var(--ok)' : '#9ca3af'};"></span>
+          <div class="entry-row-main">
+            <div class="entry-row-title">${escapeHtml(w.name)}${inactiveBadge}</div>
+            <div class="entry-row-sub">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusText}</div>
+          </div>
+        </div>
+        <div class="entry-detail" id="team-detail-${w.username}">
+          <div class="entry-tags">${responseCount} task response(s) · ${completedCount} task(s) completed</div>
+          <div class="entry-actions">
+            <button type="button" class="secondary small" onclick="requestWorkerCheckIn('${w.username}')">📍 Request Check-In</button>
+            <button type="button" class="secondary small" onclick="toggleWorkerActive('${w.username}', ${w.active === false ? 'true' : 'false'})">${w.active === false ? '↩️ Reactivate' : '🚫 Deactivate'}</button>
+            <button type="button" class="danger small" onclick="removeWorker('${w.username}')">Remove</button>
+          </div>
+          <div class="section-label" style="margin-top:14px;">Location History</div>
+          <div class="comments-list">${renderWorkerLocationHistory(w.username)}</div>
+          <div class="section-label" style="margin-top:14px;">Task Activity</div>
+          <div class="comments-list">${renderWorkerTaskHistory(w.username)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleTeamDetail(username){
+  const el = document.getElementById('team-detail-' + username);
+  if(el) el.classList.toggle('open');
+}
+window.toggleTeamDetail = toggleTeamDetail;
+
+async function toggleWorkerActive(username, makeActive){
+  try{
+    await db.collection('workers').doc(username).update({ active: makeActive });
+  }catch(err){
+    alert('Failed to update worker: ' + err.message);
+  }
+}
+window.toggleWorkerActive = toggleWorkerActive;
+
+async function removeWorker(username){
+  if(!confirm('Remove this worker\'s login? Their check-in and task history will be kept, but they will no longer be able to sign in.')) return;
+  try{
+    await db.collection('workers').doc(username).delete();
+  }catch(err){
+    alert('Failed to remove worker: ' + err.message);
+  }
+}
+window.removeWorker = removeWorker;
 
 function renderDashboard(){
   const weekEndingInput = document.getElementById('weekEnding');
