@@ -697,6 +697,16 @@
 
   <div id="workingLocationsView" style="display:none;">
 
+    <div class="card" id="exportDayCard" style="display:none;">
+      <h2>Daily Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download everything that happened on a chosen day as an Excel file.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="exportDayDate">
+      </div>
+      <button type="button" id="exportDayBtn" style="margin-top:12px;">📊 Download Excel</button>
+    </div>
+
     <div class="card" id="submitLocationCard">
       <h2>Working Locations</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Let the team know where you're working right now.</p>
@@ -850,6 +860,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -3259,6 +3270,13 @@ document.getElementById('submitLocationBtn').onclick = async () => {
 };
 
 function renderWorkingLocations(){
+  const exportCard = document.getElementById('exportDayCard');
+  if(exportCard) exportCard.style.display = isManagement() ? 'block' : 'none';
+  const exportDateInput = document.getElementById('exportDayDate');
+  if(exportDateInput && !exportDateInput.value){
+    exportDateInput.value = nowLocalDateTimeValue().slice(0, 10);
+  }
+
   const submitCard = document.getElementById('submitLocationCard');
   const canCheckIn = isFieldTrade() || isLabourer();
   if(submitCard) submitCard.style.display = canCheckIn ? 'block' : 'none';
@@ -3414,6 +3432,51 @@ async function finishLocation(id){
   }
 }
 window.finishLocation = finishLocation;
+
+document.getElementById('exportDayBtn').onclick = () => {
+  const dateStr = document.getElementById('exportDayDate').value;
+  if(!dateStr){
+    alert('Pick a date first.');
+    return;
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
+
+  const dayEntries = workingLocations
+    .filter(l => {
+      const start = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
+      return start && start >= dayStart && start <= dayEnd;
+    })
+    .sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
+
+  if(dayEntries.length === 0){
+    alert('No activity recorded for that day.');
+    return;
+  }
+
+  const rows = dayEntries.map(l => {
+    const start = l.createdAt.toDate();
+    const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate() : null;
+    const replies = (l.comments || []).map(c => `${c.author}: ${c.text}`).join(' | ');
+    return {
+      'Name': l.workerName || l.tradeLabel || '',
+      'Trade': l.tradeLabel || '',
+      'Level': l.level || '',
+      'Description': l.description || '',
+      'Check In': start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      'Check Out': end ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (l.active === false ? '' : 'Still checked in'),
+      'Duration': formatDuration(sessionDurationMs(l)),
+      'Replies': replies
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 45 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Daily Report');
+  XLSX.writeFile(wb, `Delmond Daily Report ${dateStr}.xlsx`);
+};
 
 async function requestTradeCheckIn(trade){
   try{
