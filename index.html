@@ -707,6 +707,7 @@
     <div class="card" id="submitLocationCard">
       <h2>Working Locations</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Let the team know where you're working right now.</p>
+      <div id="myHoursSummary" class="stat-grid" style="margin-bottom:14px;"></div>
       <div id="locationRequestBanner" style="display:none;"></div>
       <div class="field">
         <label>Level</label>
@@ -3263,7 +3264,20 @@ document.getElementById('submitLocationBtn').onclick = async () => {
 
 function renderWorkingLocations(){
   const submitCard = document.getElementById('submitLocationCard');
-  if(submitCard) submitCard.style.display = (isFieldTrade() || isLabourer()) ? 'block' : 'none';
+  const canCheckIn = isFieldTrade() || isLabourer();
+  if(submitCard) submitCard.style.display = canCheckIn ? 'block' : 'none';
+
+  const myHours = document.getElementById('myHoursSummary');
+  if(myHours){
+    if(canCheckIn && currentSession){
+      myHours.innerHTML = `
+        <div class="stat-tile"><div class="label">Today</div><div class="value">${formatDuration(workerHoursToday(currentSession.username))}</div></div>
+        <div class="stat-tile"><div class="label">This Week</div><div class="value">${formatDuration(workerHoursThisWeek(currentSession.username))}</div></div>
+      `;
+    } else {
+      myHours.innerHTML = '';
+    }
+  }
 
   const banner = document.getElementById('locationRequestBanner');
   if(banner){
@@ -3518,6 +3532,43 @@ document.getElementById('teamTradeFilters').addEventListener('click', (ev) => {
   renderTeam();
 });
 
+function formatDuration(ms){
+  if(ms <= 0) return '0m';
+  const totalMinutes = Math.round(ms / 60000);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function isSameDay(a, b){
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function sessionDurationMs(loc){
+  const start = loc.createdAt && loc.createdAt.toDate ? loc.createdAt.toDate() : null;
+  if(!start) return 0;
+  const end = (loc.active === false && loc.finishedAt && loc.finishedAt.toDate) ? loc.finishedAt.toDate() : new Date();
+  return Math.max(0, end - start);
+}
+
+function workerHoursToday(username){
+  const today = new Date();
+  return workingLocations
+    .filter(l => l.workerUsername === username)
+    .filter(l => l.createdAt && l.createdAt.toDate && isSameDay(l.createdAt.toDate(), today))
+    .reduce((sum, l) => sum + sessionDurationMs(l), 0);
+}
+
+function workerHoursThisWeek(username){
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  return workingLocations
+    .filter(l => l.workerUsername === username)
+    .filter(l => l.createdAt && l.createdAt.toDate && l.createdAt.toDate() >= weekStart)
+    .reduce((sum, l) => sum + sessionDurationMs(l), 0);
+}
+
 function renderWorkerLocationHistory(username){
   const history = workingLocations
     .filter(l => l.workerUsername === username)
@@ -3525,9 +3576,11 @@ function renderWorkerLocationHistory(username){
     .slice(0, 15);
   if(history.length === 0) return '<div class="empty" style="padding:6px 0;">No check-ins yet.</div>';
   return history.map(l => {
-    const start = (l.createdAt && l.createdAt.toDate) ? l.createdAt.toDate().toLocaleString() : '';
-    const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate().toLocaleString() : (l.active === false ? '' : 'Still checked in');
-    return `<div class="comment-item"><div>${escapeHtml(l.level)}</div><div class="comment-meta">${start}${end ? ' → ' + end : ''}</div></div>`;
+    const startDate = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
+    const start = startDate ? startDate.toLocaleString() : '';
+    const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (l.active === false ? '' : 'Still checked in');
+    const duration = formatDuration(sessionDurationMs(l));
+    return `<div class="comment-item"><div>${escapeHtml(l.level)} · ${duration}</div><div class="comment-meta">${start}${end ? ' → ' + end : ''}</div></div>`;
   }).join('');
 }
 
@@ -3656,6 +3709,8 @@ function renderWorkerProfile(){
 
   const responseCount = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => c.authorUsername === w.username).length, 0);
   const completedCount = tasks.filter(t => t.completed && t.completedByUsername === w.username).length;
+  const hoursToday = formatDuration(workerHoursToday(w.username));
+  const hoursWeek = formatDuration(workerHoursThisWeek(w.username));
 
   content.innerHTML = `
     <div class="location-card-header" style="margin-bottom:16px;">
@@ -3670,6 +3725,8 @@ function renderWorkerProfile(){
     ${statusHtml}
 
     <div class="stat-grid" style="margin-bottom:16px;">
+      <div class="stat-tile"><div class="label">Hours Today</div><div class="value">${hoursToday}</div></div>
+      <div class="stat-tile"><div class="label">Hours This Week</div><div class="value">${hoursWeek}</div></div>
       <div class="stat-tile"><div class="label">Task Responses</div><div class="value">${responseCount}</div></div>
       <div class="stat-tile"><div class="label">Tasks Completed</div><div class="value">${completedCount}</div></div>
     </div>
@@ -3681,7 +3738,7 @@ function renderWorkerProfile(){
       <button type="button" class="danger" onclick="removeWorker('${w.username}')">Remove</button>
     </div>
 
-    <div class="section-label">Location History</div>
+    <div class="section-label">Attendance</div>
     <div class="comments-list">${renderWorkerLocationHistory(w.username)}</div>
 
     <div class="section-label">Task Activity</div>
