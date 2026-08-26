@@ -263,6 +263,25 @@
     background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:var(--radius-sm);
     padding:10px 12px; font-size:13px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
   }
+  .location-card{
+    background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:14px;
+  }
+  .location-card:last-child{margin-bottom:0;}
+  .location-card-header{display:flex; align-items:center; gap:12px; margin-bottom:2px;}
+  .location-name{font-size:15px; font-weight:800; color:var(--text);}
+  .location-meta{font-size:12px; color:var(--muted); margin-top:1px;}
+  .location-description{
+    background:#fff; border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px;
+    padding:10px 14px; font-size:14px; color:var(--text); margin:12px 0; line-height:1.4;
+  }
+  .location-description::before{content:"\201C"; font-weight:800; color:var(--accent); margin-right:2px;}
+  .location-description::after{content:"\201D"; font-weight:800; color:var(--accent); margin-left:2px;}
+  .send-pdf-btn{
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    background:#fff; color:var(--accent); border:1.5px solid var(--accent); border-radius:10px;
+    padding:11px 16px; font-size:14px; font-weight:700;
+  }
+  .send-pdf-btn:hover{background:var(--accent-light);}
   .comment-input{
     flex:1; border:1.5px solid var(--border); border-radius:10px; padding:9px 12px; font-size:14px;
     transition:border-color .15s ease;
@@ -678,6 +697,10 @@
             <button type="button" id="clearLocationMarkerBtn" class="secondary small">Clear Pin</button>
           </div>
         </div>
+      </div>
+      <div class="field">
+        <label>What are you doing?</label>
+        <textarea id="locationDescription" placeholder="e.g. Fitting first fix pipework along the east wall"></textarea>
       </div>
       <button type="button" id="submitLocationBtn" style="margin-top:12px;">📍 I'm Working Here</button>
     </div>
@@ -3139,6 +3162,7 @@ function myPendingLocationRequests(){
 
 document.getElementById('submitLocationBtn').onclick = async () => {
   const level = document.getElementById('locationLevel').value;
+  const description = document.getElementById('locationDescription').value.trim();
   if(!level){
     alert('Select a level first.');
     return;
@@ -3152,11 +3176,13 @@ document.getElementById('submitLocationBtn').onclick = async () => {
       workerUsername: currentSession.username,
       workerName: currentSession.name,
       level,
+      description,
       areaMarker: currentLocationMarker,
       active: true,
+      comments: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} checked in`, `Working at ${level}`);
+    sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} checked in`, description || `Working at ${level}`);
     const pending = myPendingLocationRequests();
     if(pending.length){
       const batch = db.batch();
@@ -3164,6 +3190,7 @@ document.getElementById('submitLocationBtn').onclick = async () => {
       await batch.commit();
     }
     document.getElementById('locationLevel').value = '';
+    document.getElementById('locationDescription').value = '';
     document.getElementById('locationPlanWrap').style.display = 'none';
     clearLocationMarker();
   }catch(err){
@@ -3220,36 +3247,90 @@ function renderWorkingLocations(){
     const miniPlanSrc = getPlanForLevel(loc.level);
     const miniStyle = miniPlanSrc ? `background-image:url('${miniPlanSrc}'); background-size:cover; background-position:center;` : '';
     const markerHtml = loc.areaMarker ? `
-      <div class="plan-readout" style="margin-top:6px;">
+      <div class="plan-readout" style="margin-top:10px;">
         <div class="plan-mini" style="${miniStyle}">
           <div class="plan-marker" style="display:block; left:${loc.areaMarker.x}%; top:${loc.areaMarker.y}%;"></div>
         </div>
-        <span>📍 Pin at ${loc.areaMarker.x}%, ${loc.areaMarker.y}% on ${escapeHtml(loc.level)} plan</span>
+        <span>📍 Pin dropped on ${escapeHtml(loc.level)} plan</span>
       </div>
     ` : '';
-    const whoLabel = loc.workerName && loc.workerName !== loc.tradeLabel
-      ? `${escapeHtml(loc.workerName)} · ${escapeHtml(loc.tradeLabel)}`
-      : escapeHtml(loc.tradeLabel);
+    const descriptionHtml = loc.description
+      ? `<div class="location-description">${escapeHtml(loc.description)}</div>`
+      : '';
     const canFinish = currentSession && currentSession.username === loc.workerUsername;
     const canSendPdf = isManagement();
     const actionsHtml = (canFinish || canSendPdf) ? `
       <div class="entry-actions">
-        ${canFinish ? `<button type="button" class="secondary small" onclick="finishLocation('${loc.id}')">✅ Finished Here</button>` : ''}
-        ${canSendPdf ? `<label class="secondary small" style="cursor:pointer; display:inline-flex; align-items:center;">📄 Send PDF<input type="file" accept="application/pdf,.pdf" style="display:none;" onchange="sendPdfToLocation('${loc.id}', this)"></label>` : ''}
+        ${canFinish ? `<button type="button" class="secondary" onclick="finishLocation('${loc.id}')">✅ Finished Here</button>` : ''}
+        ${canSendPdf ? `<label class="send-pdf-btn">📄 Send PDF<input type="file" accept="application/pdf,.pdf" style="display:none;" onchange="sendPdfToLocation('${loc.id}', this)"></label>` : ''}
       </div>
     ` : '';
+    const commentsHtml = (loc.comments && loc.comments.length)
+      ? loc.comments.map(c => `
+          <div class="comment-item">
+            <div><strong>${escapeHtml(c.author || '')}</strong>${c.role ? ' · ' + escapeHtml(c.role) : ''}</div>
+            <div>${escapeHtml(c.text)}</div>
+            <div class="comment-meta">${isNaN(new Date(c.dateTime)) ? c.dateTime : new Date(c.dateTime).toLocaleString()}</div>
+          </div>
+        `).join('')
+      : '<div class="empty" style="padding:6px 0;">No replies yet.</div>';
 
     return `
-      <div class="entry-item">
-        <div class="entry-detail open">
-          <div class="entry-tags"><span class="type-tag" style="background:#e0e7ff; color:#1d4ed8;">${whoLabel}</span> &nbsp;Level: ${escapeHtml(loc.level)} &nbsp;${time}</div>
-          ${markerHtml}
-          ${actionsHtml}
+      <div class="location-card">
+        <div class="location-card-header">
+          <div class="contact-avatar" style="background:#1d4ed8;">${escapeHtml((loc.workerName || loc.tradeLabel || '?').charAt(0))}</div>
+          <div style="flex:1; min-width:0;">
+            <div class="location-name">${escapeHtml(loc.workerName || loc.tradeLabel)}</div>
+            <div class="location-meta">${escapeHtml(loc.tradeLabel)} · Level: ${escapeHtml(loc.level)} · ${time}</div>
+          </div>
+        </div>
+        ${descriptionHtml}
+        ${markerHtml}
+        ${actionsHtml}
+        <div class="section-label" style="margin-top:14px;">Replies</div>
+        <div class="comments-list">${commentsHtml}</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="text" class="comment-input" id="locationCommentInput-${loc.id}" placeholder="Reply...">
+          <button type="button" class="secondary small" onclick="sendLocationReply('${loc.id}')">Send</button>
         </div>
       </div>
     `;
   }).join('');
 }
+
+async function sendLocationReply(id){
+  const input = document.getElementById('locationCommentInput-' + id);
+  const text = input ? input.value.trim() : '';
+  if(!text) return;
+  try{
+    const comment = {
+      text,
+      author: currentSession.name,
+      authorUsername: currentSession.username,
+      role: currentSession.roleLabel,
+      dateTime: new Date().toISOString()
+    };
+    await db.collection('workingLocations').doc(id).update({
+      comments: firebase.firestore.FieldValue.arrayUnion(comment)
+    });
+    if(input) input.value = '';
+    const loc = workingLocations.find(l => l.id === id);
+    if(!loc) return;
+    if(isManagement()){
+      const isIndividual = loc.workerUsername && loc.workerUsername !== loc.trade;
+      if(isIndividual){
+        sendPushNotificationToUser(loc.workerUsername, `${currentSession.name} replied`, text);
+      } else {
+        sendPushNotification([loc.trade], `${currentSession.name} replied`, text);
+      }
+    } else {
+      sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} replied about their location`, text);
+    }
+  }catch(err){
+    alert('Failed to send reply: ' + err.message);
+  }
+}
+window.sendLocationReply = sendLocationReply;
 
 async function finishLocation(id){
   try{
