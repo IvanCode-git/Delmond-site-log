@@ -259,6 +259,10 @@
     width:40px; height:40px; border-radius:50%; background:var(--accent); color:#fff;
     display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; font-size:15px;
   }
+  .roster-avatar-wrap{position:relative; flex-shrink:0;}
+  .roster-status-dot{
+    position:absolute; bottom:-1px; right:-1px; width:13px; height:13px; border-radius:50%; border:2.5px solid #fff;
+  }
   .contact-info{flex:1; min-width:0;}
   .contact-name{font-weight:700; font-size:14px;}
   .contact-preview{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -761,6 +765,7 @@
 
     <div class="card">
       <h2>Team Overview</h2>
+      <div id="teamSummary" class="stat-grid" style="margin-bottom:14px;"></div>
       <div class="status-toggle" id="teamTradeFilters">
         <button data-trade="all" class="active">All</button>
         <button data-trade="labourer">Labourers</button>
@@ -3534,27 +3539,62 @@ function renderTeam(){
     return;
   }
 
+  const summary = document.getElementById('teamSummary');
+  if(summary){
+    const activeWorkers = workers.filter(w => w.active !== false);
+    const isWorkingNow = (w) => workingLocations.some(l => l.workerUsername === w.username && l.active !== false);
+    const workingNow = activeWorkers.filter(isWorkingNow);
+    const countFor = (trade) => workingNow.filter(w => w.trade === trade).length;
+    summary.innerHTML = `
+      <div class="stat-tile"><div class="label">Working Now</div><div class="value">${workingNow.length}</div></div>
+      <div class="stat-tile"><div class="label">Total Team</div><div class="value">${activeWorkers.length}</div></div>
+      <div class="stat-tile"><div class="label">Labourers</div><div class="value">${countFor('labourer')}</div></div>
+      <div class="stat-tile"><div class="label">Fixers</div><div class="value">${countFor('fixers')}</div></div>
+      <div class="stat-tile"><div class="label">Jointers</div><div class="value">${countFor('jointers')}</div></div>
+    `;
+  }
+
   const list = document.getElementById('teamList');
   if(!list) return;
   const filtered = activeTeamTradeFilter === 'all' ? workers : workers.filter(w => w.trade === activeTeamTradeFilter);
-  const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+
+  const withStatus = filtered.map(w => ({
+    w,
+    activeLoc: workingLocations.find(l => l.workerUsername === w.username && l.active !== false)
+  }));
+  const sorted = withStatus.sort((a, b) => {
+    if(!!a.activeLoc !== !!b.activeLoc) return a.activeLoc ? -1 : 1;
+    return a.w.name.localeCompare(b.w.name);
+  });
 
   if(sorted.length === 0){
     list.innerHTML = '<div class="empty">No workers added yet — use the form above to add your first one.</div>';
     return;
   }
 
-  list.innerHTML = sorted.map(w => {
-    const activeLoc = workingLocations.find(l => l.workerUsername === w.username && l.active !== false);
-    const statusText = activeLoc ? `📍 ${escapeHtml(activeLoc.level)}` : 'Not checked in';
+  list.innerHTML = sorted.map(({ w, activeLoc }) => {
     const inactiveBadge = w.active === false ? '<span class="status-badge dismissed">Inactive</span>' : '';
+    let statusLine;
+    if(activeLoc){
+      statusLine = `📍 ${escapeHtml(activeLoc.level)}${activeLoc.description ? ' · ' + escapeHtml(activeLoc.description) : ''}`;
+    } else {
+      const lastLoc = workingLocations
+        .filter(l => l.workerUsername === w.username)
+        .sort((a, b) => tsOf(b.finishedAt || b.createdAt) - tsOf(a.finishedAt || a.createdAt))[0];
+      statusLine = (lastLoc && lastLoc.finishedAt && lastLoc.finishedAt.toDate)
+        ? 'Last seen ' + lastLoc.finishedAt.toDate().toLocaleDateString()
+        : 'Not checked in yet';
+    }
 
     return `
       <div class="contact-row" onclick="openWorkerProfile('${w.username}')">
-        <div class="contact-avatar" style="background:${activeLoc ? '#1d4ed8' : '#9ca3af'};">${escapeHtml(w.name.charAt(0))}</div>
+        <div class="roster-avatar-wrap">
+          <div class="contact-avatar" style="background:${activeLoc ? '#1d4ed8' : '#9ca3af'};">${escapeHtml(w.name.charAt(0))}</div>
+          <span class="roster-status-dot" style="background:${activeLoc ? 'var(--ok)' : '#9ca3af'};"></span>
+        </div>
         <div class="contact-info">
           <div class="contact-name">${escapeHtml(w.name)}${inactiveBadge}</div>
-          <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusText}</div>
+          <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusLine}</div>
         </div>
         <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
       </div>
