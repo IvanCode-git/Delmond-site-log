@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE_NAME = 'delmond-site-log-v4';
+const CACHE_NAME = 'delmond-site-log-v5';
 const ASSETS = [
   './index.html',
   './manifest.json',

@@ -1488,12 +1488,31 @@ function forceLogout(message){
 
 hideAllAppUI();
 
+function showUpdateBanner(){
+  if(document.getElementById('updateBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  banner.style.cssText = 'position:fixed; bottom:78px; left:12px; right:12px; z-index:2000; background:var(--accent); color:#fff; padding:12px 16px; border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.3); display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; max-width:420px; margin:0 auto;';
+  banner.innerHTML = `<span>A new version of this app is ready.</span><button type="button" style="background:#fff; color:var(--accent); border:none; border-radius:7px; padding:7px 14px; font-weight:700; cursor:pointer; flex-shrink:0;">Refresh</button>`;
+  banner.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(banner);
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' }).then((reg) => {
       reg.update().catch(() => {});
+      setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
     }).catch((err) => {
       console.warn('Service worker registration failed', err);
+    });
+    let seenController = navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(!seenController){
+        seenController = navigator.serviceWorker.controller;
+        return;
+      }
+      showUpdateBanner();
     });
   });
 }
