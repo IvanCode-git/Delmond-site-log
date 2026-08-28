@@ -74,6 +74,20 @@
     max-height:0; overflow:hidden; transition:max-height .28s ease, opacity .2s ease; opacity:0;
   }
   .collapsible-body.open{max-height:2600px; opacity:1;}
+
+  .card-section-header{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;
+  }
+  .card-section-header .chevron{
+    color:var(--muted); font-size:12px; transition:transform .2s ease; flex-shrink:0; margin-left:8px;
+  }
+  .card-section-header.open .chevron{transform:rotate(90deg);}
+  .card-section-body{
+    overflow:hidden; max-height:0; opacity:0; margin-top:14px;
+    transition:max-height .28s ease, opacity .2s ease;
+  }
+  .card-section-body > *:first-child{margin-top:0 !important;}
+  .card-section-body.open{opacity:1;}
   button.secondary{background:#fff; color:var(--accent); border:1px solid var(--border); box-shadow:none;}
   button.secondary:hover{background:var(--accent-light); border-color:var(--accent); box-shadow:none;}
   button.danger{background:#fff; color:var(--danger); border:1px solid #fecaca; box-shadow:none;}
@@ -150,8 +164,36 @@
     transition:border-color .15s ease, box-shadow .15s ease;
   }
   .lock-box input:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px var(--accent-light);}
+  .password-field{position:relative;}
+  .password-field input{padding-right:40px !important;}
+  #togglePasswordBtn{
+    position:absolute; right:6px; top:0; bottom:12px; margin:auto 0; height:28px !important; width:28px !important;
+    background:none; border:none; font-size:15px; line-height:1; cursor:pointer; opacity:.55;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  #togglePasswordBtn:hover{opacity:1;}
   #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px; font-weight:600;}
   #lockScreen button{width:100%;}
+  #sitePickerScreen{
+    position:fixed; inset:0; background:var(--accent);
+    display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px;
+  }
+  .site-picker-box{
+    background:#fff; border-radius:14px; padding:36px 30px; width:340px; max-width:100%;
+    text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .site-picker-box img{width:56px; height:56px; margin-bottom:14px; border-radius:12px;}
+  .site-picker-box h2{margin:0 0 4px; font-size:19px; font-weight:700; color:var(--text); letter-spacing:-.01em;}
+  .site-picker-box p{margin:0 0 20px; font-size:12px; color:var(--muted);}
+  #sitePickerList{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;}
+  .site-picker-item{
+    display:flex; align-items:center; justify-content:space-between; width:100%;
+    padding:14px 16px; border:1.5px solid var(--border); border-radius:10px; background:#fff;
+    font-size:15px; font-weight:600; color:var(--text); text-align:left; cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .site-picker-item:hover{border-color:var(--accent); background:var(--accent-light);}
+  .site-picker-item .arrow{color:var(--muted); font-weight:400;}
   .header-actions{display:flex; align-items:center; gap:10px;}
   .session-pill{font-size:12px; opacity:.9; font-weight:600;}
   .header-actions button{background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.4); font-weight:600; box-shadow:none;}
@@ -347,15 +389,28 @@
     <h2>Delmond Site Log</h2>
     <p>Sign in to continue</p>
     <input type="text" id="usernameInput" placeholder="Username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
-    <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password">
+    <div class="password-field">
+      <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password">
+      <button type="button" id="togglePasswordBtn" aria-label="Show password">👁</button>
+    </div>
     <div id="pinError"></div>
     <button id="pinSubmitBtn">Sign In</button>
+  </div>
+</div>
+
+<div id="sitePickerScreen" style="display:none;">
+  <div class="site-picker-box">
+    <img src="icons/icon-192.png" alt="Delmond">
+    <h2>Choose a Site</h2>
+    <p>Pick which site you want to work in — you can switch again anytime.</p>
+    <div id="sitePickerList"></div>
   </div>
 </div>
 
 <header>
   <h1>🏗️ Delmond Site Log</h1>
   <div class="header-actions">
+    <button id="siteSwitcherBtn" class="small" style="display:none;"></button>
     <div id="projectPill"></div>
     <div id="sessionPill" class="session-pill"></div>
     <button id="notifyBtn" class="small" style="display:none;">🔔 Enable Notifications</button>
@@ -368,11 +423,21 @@
   <div id="logView">
 
     <div class="card">
-      <h2>Daily Report</h2>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every log entry from a chosen day as Excel or PDF.</p>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="logReportDate">
+      <h2>Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download log entries as Excel or PDF — daily, weekly, or monthly.</p>
+      <div class="row">
+        <div class="field">
+          <label>Period</label>
+          <select id="logReportPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date (any day in the period)</label>
+          <input type="date" id="logReportDate">
+        </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button type="button" id="logReportExcelBtn">📊 Download Excel</button>
@@ -411,6 +476,40 @@
           </div>
         </div>
         <button id="saveProjectBtn" style="margin-top:8px;">Save Project Details</button>
+      </div>
+    </div>
+
+    <div class="card" id="sitesCard" style="display:none;">
+      <h2>Sites</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Switch sites from the picker in the header. Add a new site here — it starts empty with its own team, drawings, and log.</p>
+      <div id="sitesManagerList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="newSiteNameInput" class="comment-input" placeholder="New site name, e.g. 42 Baker Street" autocomplete="off">
+        <button type="button" class="secondary small" id="addSiteBtn">Create Site</button>
+      </div>
+    </div>
+
+    <div class="card" id="notificationSettingsCard" style="display:none;">
+      <h2>Email Notifications</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Set the address these emails are sent from, and who gets notified every time a task or check-in is completed on this site.</p>
+      <div class="row">
+        <div class="field">
+          <label>From Name (optional)</label>
+          <input type="text" id="notifyFromName" placeholder="e.g. Delmond Site Log" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>From Email</label>
+          <input type="email" id="notifyFromEmail" placeholder="e.g. alerts@delmondconstruction.co.uk" autocomplete="off">
+        </div>
+      </div>
+      <p style="font-size:11px; color:var(--muted); margin:-4px 0 12px;">ℹ️ One-time setup: your engineer needs to verify this domain with our email provider before it can send. Saving it here is safe either way — nothing breaks if that's not done yet.</p>
+      <button type="button" class="secondary small" id="saveNotifyFromBtn">Save Sender</button>
+
+      <div class="section-label" style="margin-top:18px;">Notify These People on Every Completion</div>
+      <div id="notifyRecipientsList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
+      <div style="display:flex; gap:8px;">
+        <input type="email" id="newRecipientEmailInput" class="comment-input" placeholder="e.g. pm@maincontractor.com" autocomplete="off">
+        <button type="button" class="secondary small" id="addRecipientBtn">Add</button>
       </div>
     </div>
 
@@ -626,11 +725,21 @@
   <div id="tasksView" style="display:none;">
 
     <div class="card" id="tasksReportCard" style="display:none;">
-      <h2>Daily Report</h2>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every task assigned on a chosen day as Excel or PDF.</p>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="tasksReportDate">
+      <h2>Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download tasks as Excel or PDF — daily, weekly, or monthly.</p>
+      <div class="row">
+        <div class="field">
+          <label>Period</label>
+          <select id="tasksReportPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date (any day in the period)</label>
+          <input type="date" id="tasksReportDate">
+        </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button type="button" id="tasksReportExcelBtn">📊 Download Excel</button>
@@ -660,7 +769,7 @@
       </div>
       <div class="field">
         <label>Notify by Email (optional)</label>
-        <input type="text" id="taskNotifyEmails" placeholder="e.g. client@example.com, pm@maincontractor.com">
+        <input type="text" id="taskNotifyEmails" placeholder="e.g. client@example.com, pm@maincontractor.com" autocomplete="off">
       </div>
       <div class="field">
         <label>Photos (optional)</label>
@@ -683,11 +792,21 @@
 
   <div id="requestsView" style="display:none;">
     <div class="card">
-      <h2>Daily Report</h2>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download every request submitted on a chosen day as Excel or PDF.</p>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="requestsReportDate">
+      <h2>Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download requests as Excel or PDF — daily, weekly, or monthly.</p>
+      <div class="row">
+        <div class="field">
+          <label>Period</label>
+          <select id="requestsReportPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date (any day in the period)</label>
+          <input type="date" id="requestsReportDate">
+        </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button type="button" id="requestsReportExcelBtn">📊 Download Excel</button>
@@ -745,11 +864,21 @@
   <div id="workingLocationsView" style="display:none;">
 
     <div class="card" id="exportDayCard" style="display:none;">
-      <h2>Daily Report</h2>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download everything that happened on a chosen day as an Excel file.</p>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="exportDayDate">
+      <h2>Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download check-in activity as Excel or PDF — daily, weekly, or monthly.</p>
+      <div class="row">
+        <div class="field">
+          <label>Period</label>
+          <select id="exportDayPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date (any day in the period)</label>
+          <input type="date" id="exportDayDate">
+        </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button type="button" id="exportDayBtn">📊 Download Excel</button>
@@ -805,7 +934,7 @@
       <div class="row">
         <div class="field">
           <label>Full Name</label>
-          <input type="text" id="workerName" placeholder="e.g. John Smith">
+          <input type="text" id="workerName" placeholder="e.g. John Smith" autocomplete="off">
         </div>
         <div class="field">
           <label>Trade</label>
@@ -819,22 +948,32 @@
       <div class="row">
         <div class="field">
           <label>Username</label>
-          <input type="text" id="workerUsername" placeholder="e.g. jsmith" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <input type="text" id="workerUsername" placeholder="e.g. jsmith" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="text" id="workerPassword" placeholder="e.g. a 4-digit code">
+          <input type="text" id="workerPassword" placeholder="e.g. a 4-digit code" autocomplete="new-password">
         </div>
       </div>
       <button type="button" id="addWorkerBtn">Add Worker</button>
     </div>
 
     <div class="card">
-      <h2>Daily Report</h2>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download a roster summary for a chosen day as Excel or PDF — who worked, hours, and task activity.</p>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="teamReportDate">
+      <h2>Report</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Download a roster summary as Excel or PDF — who worked, hours, and task activity. Daily, weekly, or monthly.</p>
+      <div class="row">
+        <div class="field">
+          <label>Period</label>
+          <select id="teamReportPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date (any day in the period)</label>
+          <input type="date" id="teamReportDate">
+        </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button type="button" id="teamReportExcelBtn">📊 Download Excel</button>
@@ -945,29 +1084,35 @@ db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
 const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT4222lFHjzkkpq_sCf_gvrv_wU16BlQ5pE';
 const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
 const EMAIL_WORKER_URL = NOTIFY_WORKER_URL + 'email';
-const VAL_EMAIL = 'VAL_EMAIL_PLACEHOLDER';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+let notificationSettings = { fromName: '', fromEmail: '', recipients: [] };
 
 async function sendSummaryEmail(to, subject, bodyLines){
   if(!to) return;
   try{
+    const payload = {
+      to,
+      subject,
+      html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('')
+    };
+    if(notificationSettings.fromEmail){
+      payload.from = notificationSettings.fromName
+        ? `${notificationSettings.fromName} <${notificationSettings.fromEmail}>`
+        : notificationSettings.fromEmail;
+    }
     await fetch(EMAIL_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to,
-        subject,
-        html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('')
-      })
+      body: JSON.stringify(payload)
     });
   }catch(err){
     console.warn('Could not send summary email to', to, err);
   }
 }
 
-async function sendSummaryEmailToVal(subject, bodyLines){
-  if(VAL_EMAIL === 'VAL_EMAIL_PLACEHOLDER') return;
-  return sendSummaryEmail(VAL_EMAIL, subject, bodyLines);
+async function notifySiteRecipients(subject, bodyLines){
+  (notificationSettings.recipients || []).forEach(addr => sendSummaryEmail(addr, subject, bodyLines));
 }
 let messaging = null;
 try{
@@ -1054,6 +1199,8 @@ function showLockScreen(){
   document.getElementById('lockScreen').style.display = 'flex';
   document.getElementById('usernameInput').value = '';
   document.getElementById('passwordInput').value = '';
+  document.getElementById('passwordInput').type = 'password';
+  document.getElementById('togglePasswordBtn').textContent = '👁';
   document.getElementById('pinError').textContent = '';
   document.getElementById('usernameInput').focus();
 }
@@ -1101,7 +1248,7 @@ async function registerPushToken(){
     const registration = await navigator.serviceWorker.ready;
     const token = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: registration });
     if(!token) throw new Error('No token returned');
-    await db.collection('pushTokens').doc(token).set({
+    await siteCollection('pushTokens').doc(token).set({
       token,
       role: currentSession.role,
       username: currentSession.username,
@@ -1147,7 +1294,7 @@ if(messaging){
 async function sendPushNotification(targetRoles, title, body){
   if(!NOTIFY_WORKER_URL || NOTIFY_WORKER_URL === 'NOTIFY_WORKER_URL_PLACEHOLDER') return;
   try{
-    const snapshot = await db.collection('pushTokens').where('role', 'in', targetRoles).get();
+    const snapshot = await siteCollection('pushTokens').where('role', 'in', targetRoles).get();
     const tokens = snapshot.docs.map(d => d.id);
     if(tokens.length === 0) return;
     await fetch(NOTIFY_WORKER_URL, {
@@ -1163,7 +1310,7 @@ async function sendPushNotification(targetRoles, title, body){
 async function sendPushNotificationToUser(username, title, body){
   if(!NOTIFY_WORKER_URL || NOTIFY_WORKER_URL === 'NOTIFY_WORKER_URL_PLACEHOLDER') return;
   try{
-    const snapshot = await db.collection('pushTokens').where('username', '==', username).get();
+    const snapshot = await siteCollection('pushTokens').where('username', '==', username).get();
     const tokens = snapshot.docs.map(d => d.id);
     if(tokens.length === 0) return;
     await fetch(NOTIFY_WORKER_URL, {
@@ -1209,39 +1356,87 @@ function applyRoleAccess(){
   });
   const firstAllowed = navButtons.find(btn => btn.dataset.roles.split(',').includes(role));
   if(firstAllowed) showTab(firstAllowed.dataset.tab);
+  document.getElementById('sitesCard').style.display = isSiteAdmin() ? '' : 'none';
+  renderSitesManager();
+  document.getElementById('notificationSettingsCard').style.display = isManagement() ? '' : 'none';
+  renderNotificationSettings();
 }
 
 document.querySelectorAll('.bottom-nav button').forEach(btn => {
   btn.onclick = () => showTab(btn.dataset.tab);
 });
 
-function attemptUnlock(){
+function enterApp(siteId){
+  switchToSite(siteId);
+  applyRoleAccess();
+  updateNotifyButton();
+  updateMessagesNavBadge();
+  registerPushToken();
+  hideLockScreen();
+  hideSitePicker();
+  persistSession();
+}
+
+function finishLogin(matched, siteId, offerPicker){
+  currentSession = matched;
+  applySession();
+  if(offerPicker && sites.length > 1){
+    hideLockScreen();
+    showSitePicker();
+  } else {
+    enterApp(siteId);
+  }
+}
+
+function loginFailed(message){
+  document.getElementById('pinError').textContent = message || 'Incorrect username or password, try again.';
+  document.getElementById('passwordInput').value = '';
+  document.getElementById('passwordInput').focus();
+}
+
+async function attemptUnlock(){
   const username = document.getElementById('usernameInput').value.trim().toLowerCase();
   const password = document.getElementById('passwordInput').value.trim();
   const user = USERS[username];
-  const worker = workers.find(w => w.username === username && w.active !== false);
 
-  let matched = null;
   if(user && password === user.password){
-    matched = { username, role: user.role, name: user.name, roleLabel: user.roleLabel };
-  } else if(worker && password === worker.password){
-    matched = { username: worker.username, role: worker.trade, name: worker.name, roleLabel: TRADE_LABELS[worker.trade] || worker.trade };
+    const defaultSiteId = (currentSiteId && sites.some(s => s.id === currentSiteId)) ? currentSiteId : (sites[0] && sites[0].id);
+    if(!defaultSiteId){
+      loginFailed('No sites have been set up yet. Ask an engineer to create one.');
+      return;
+    }
+    finishLogin({ username, role: user.role, name: user.name, roleLabel: user.roleLabel }, defaultSiteId, true);
+    return;
   }
 
-  if(matched){
-    currentSession = matched;
-    applySession();
-    applyRoleAccess();
-    updateNotifyButton();
-    updateMessagesNavBadge();
-    registerPushToken();
-    hideLockScreen();
-  } else {
-    document.getElementById('pinError').textContent = 'Incorrect username or password, try again.';
-    document.getElementById('passwordInput').value = '';
-    document.getElementById('passwordInput').focus();
+  const submitBtn = document.getElementById('pinSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in…';
+  try{
+    const snap = await db.collectionGroup('workers').where('username', '==', username).limit(1).get();
+    if(snap.empty){ loginFailed(); return; }
+    const doc = snap.docs[0];
+    const worker = { id: doc.id, username: doc.id, ...doc.data() };
+    if(worker.active === false || password !== worker.password){ loginFailed(); return; }
+    const siteId = doc.ref.parent.parent.id;
+    finishLogin({ username: worker.username, role: worker.trade, name: worker.name, roleLabel: TRADE_LABELS[worker.trade] || worker.trade }, siteId);
+  }catch(err){
+    console.error('Login lookup failed', err);
+    loginFailed('Could not sign in — check your connection and try again.');
+  }finally{
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In';
   }
 }
+document.getElementById('togglePasswordBtn').onclick = () => {
+  const input = document.getElementById('passwordInput');
+  const btn = document.getElementById('togglePasswordBtn');
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  btn.textContent = showing ? '👁' : '🙈';
+  btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+  input.focus();
+};
 
 document.getElementById('pinSubmitBtn').onclick = attemptUnlock;
 document.getElementById('usernameInput').addEventListener('keydown', (ev) => {
@@ -1252,16 +1447,46 @@ document.getElementById('passwordInput').addEventListener('keydown', (ev) => {
 });
 document.getElementById('lockBtn').onclick = () => {
   currentSession = null;
+  lsRemove('siteLog.session');
   applySession();
   updateNotifyButton();
   updateMessagesNavBadge();
+  renderSiteSwitcher();
   hideAllAppUI();
   showLockScreen();
 };
 
-lsRemove('siteLog.session');
+function persistSession(){
+  if(currentSession && currentSiteId){
+    lsSet('siteLog.session', JSON.stringify({ session: currentSession, siteId: currentSiteId }));
+  }
+}
+
+function tryRestoreSession(){
+  const raw = lsGet('siteLog.session', null);
+  if(!raw) return false;
+  let parsed;
+  try{ parsed = JSON.parse(raw); }catch(e){ lsRemove('siteLog.session'); return false; }
+  if(!parsed || !parsed.session || !parsed.siteId){ lsRemove('siteLog.session'); return false; }
+  currentSession = parsed.session;
+  applySession();
+  enterApp(parsed.siteId);
+  return true;
+}
+
+function forceLogout(message){
+  currentSession = null;
+  lsRemove('siteLog.session');
+  applySession();
+  updateNotifyButton();
+  updateMessagesNavBadge();
+  renderSiteSwitcher();
+  hideAllAppUI();
+  showLockScreen();
+  if(message) document.getElementById('pinError').textContent = message;
+}
+
 hideAllAppUI();
-showLockScreen();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
@@ -1365,7 +1590,7 @@ renderLevelsManager();
 
 async function saveLevelsConfig(){
   try{
-    await db.collection('meta').doc('levelsConfig').set({ levels: levelsList, plans: customLevelPlans });
+    await siteCollection('meta').doc('levelsConfig').set({ levels: levelsList, plans: customLevelPlans });
   }catch(err){
     alert('Failed to save levels: ' + err.message);
   }
@@ -1658,6 +1883,57 @@ document.getElementById('handoverHeader').onclick = () => {
   setCollapsible('handoverHeader', 'handoverBody', !isOpen);
 };
 
+function toggleCardSection(headerDiv, bodyDiv){
+  const willOpen = !bodyDiv.classList.contains('open');
+  if(willOpen){
+    bodyDiv.classList.add('open');
+    headerDiv.classList.add('open');
+    bodyDiv.style.maxHeight = bodyDiv.scrollHeight + 'px';
+    const onEnd = (e) => {
+      if(e.propertyName !== 'max-height') return;
+      if(bodyDiv.classList.contains('open')) bodyDiv.style.maxHeight = 'none';
+      bodyDiv.removeEventListener('transitionend', onEnd);
+    };
+    bodyDiv.addEventListener('transitionend', onEnd);
+  } else {
+    bodyDiv.style.maxHeight = bodyDiv.scrollHeight + 'px';
+    bodyDiv.offsetHeight;
+    bodyDiv.style.maxHeight = '0px';
+    bodyDiv.classList.remove('open');
+    headerDiv.classList.remove('open');
+  }
+}
+
+function makeCardsCollapsible(){
+  document.querySelectorAll('.card').forEach(card => {
+    const heading = card.firstElementChild;
+    if(!heading || heading.tagName !== 'H2') return;
+    const bodyChildren = Array.from(card.children).slice(1);
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'card-section-header open';
+    heading.style.margin = '0';
+    card.insertBefore(headerDiv, heading);
+    headerDiv.appendChild(heading);
+    const chevron = document.createElement('span');
+    chevron.className = 'chevron';
+    chevron.textContent = '▸';
+    headerDiv.appendChild(chevron);
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'card-section-body open';
+    bodyDiv.style.maxHeight = 'none';
+    bodyChildren.forEach(el => bodyDiv.appendChild(el));
+    card.appendChild(bodyDiv);
+    headerDiv.addEventListener('click', () => toggleCardSection(headerDiv, bodyDiv));
+  });
+}
+makeCardsCollapsible();
+
+let sites = [];
+let sitesUnsub = null;
+let currentSiteId = lsGet('currentSiteId', null);
+function siteRef(){ return db.collection('sites').doc(currentSiteId); }
+function siteCollection(name){ return siteRef().collection(name); }
+
 let project = {};
 let entries = [];
 let tasks = [];
@@ -1681,13 +1957,17 @@ let recordedChunks = [];
 let activeFilter = 'all';
 let activeStatusFilter = 'active';
 let activeTaskStatusFilter = 'active';
-let firestoreSyncStarted = false;
+let siteListenerUnsubs = {};
+let sitesSyncStarted = false;
 let selectedEntryIds = new Set();
 let editingEntryId = null;
 let existingAudioDataUrl = null;
 
 function isManagement(){
   return !!currentSession && ['pm', 'supervisor', 'engineer'].includes(currentSession.role);
+}
+function isSiteAdmin(){
+  return !!currentSession && currentSession.username === 'ivan';
 }
 function isLabourer(){
   return !!currentSession && currentSession.role === 'labourer';
@@ -1696,60 +1976,44 @@ function isFieldTrade(){
   return !!currentSession && ['fixers', 'jointers'].includes(currentSession.role);
 }
 
-function startFirestoreSync(){
-  if(firestoreSyncStarted) return;
-  firestoreSyncStarted = true;
-  attachFirestoreListeners(4);
+function teardownSiteListeners(){
+  Object.values(siteListenerUnsubs).forEach((unsub) => { if(unsub) unsub(); });
+  siteListenerUnsubs = {};
 }
 
-function attachFirestoreListeners(retriesLeft){
+function switchToSite(siteId, retriesLeft){
+  if(!siteId) return;
+  if(retriesLeft === undefined) retriesLeft = 4;
+  teardownSiteListeners();
+  currentSiteId = siteId;
+  lsSet('currentSiteId', siteId);
   document.getElementById('entriesList').innerHTML = '<div class="empty">Loading shared log…</div>';
 
   let retryScheduled = false;
-  let projectUnsub = null;
-  let entriesUnsub = null;
-  let entryTypesUnsub = null;
-  let levelsConfigUnsub = null;
-  let tasksUnsub = null;
-  let requestsUnsub = null;
-  let messagesUnsub = null;
-  let workingLocationsUnsub = null;
-  let workersUnsub = null;
-  let locationRequestsUnsub = null;
-
   const handleSyncError = (err) => {
     console.warn('Firestore sync error (will retry if attempts remain)', err);
     if(retryScheduled) return;
     retryScheduled = true;
-    if(projectUnsub) projectUnsub();
-    if(entriesUnsub) entriesUnsub();
-    if(entryTypesUnsub) entryTypesUnsub();
-    if(levelsConfigUnsub) levelsConfigUnsub();
-    if(tasksUnsub) tasksUnsub();
-    if(requestsUnsub) requestsUnsub();
-    if(messagesUnsub) messagesUnsub();
-    if(workingLocationsUnsub) workingLocationsUnsub();
-    if(workersUnsub) workersUnsub();
-    if(locationRequestsUnsub) locationRequestsUnsub();
+    teardownSiteListeners();
     if(retriesLeft > 0){
-      setTimeout(() => attachFirestoreListeners(retriesLeft - 1), 1200);
+      setTimeout(() => switchToSite(siteId, retriesLeft - 1), 1200);
     } else {
       console.error('Firestore sync failed after retries', err);
       document.getElementById('entriesList').innerHTML = '<div class="empty">Could not connect to the shared log. Check your connection and reload.</div>';
     }
   };
 
-  projectUnsub = db.collection('meta').doc('project').onSnapshot((doc) => {
+  siteListenerUnsubs.project = siteCollection('meta').doc('project').onSnapshot((doc) => {
     project = doc.exists ? doc.data() : {};
     renderProject();
   }, handleSyncError);
 
-  entryTypesUnsub = db.collection('meta').doc('entryTypesConfig').onSnapshot((doc) => {
+  siteListenerUnsubs.entryTypes = siteCollection('meta').doc('entryTypesConfig').onSnapshot((doc) => {
     if(doc.exists && Array.isArray(doc.data().types) && doc.data().types.length){
       entryTypesList = doc.data().types;
     } else {
       entryTypesList = DEFAULT_ENTRY_TYPES.slice();
-      db.collection('meta').doc('entryTypesConfig').set({ types: entryTypesList })
+      siteCollection('meta').doc('entryTypesConfig').set({ types: entryTypesList })
         .catch((e) => console.warn('Could not seed entry types', e));
     }
     populateEntryTypeSelect();
@@ -1759,14 +2023,14 @@ function attachFirestoreListeners(retriesLeft){
     renderDashboard();
   }, handleSyncError);
 
-  levelsConfigUnsub = db.collection('meta').doc('levelsConfig').onSnapshot((doc) => {
+  siteListenerUnsubs.levelsConfig = siteCollection('meta').doc('levelsConfig').onSnapshot((doc) => {
     if(doc.exists && Array.isArray(doc.data().levels) && doc.data().levels.length){
       levelsList = doc.data().levels;
       customLevelPlans = doc.data().plans || {};
     } else {
       levelsList = LEVELS.slice();
       customLevelPlans = {};
-      db.collection('meta').doc('levelsConfig').set({ levels: levelsList, plans: {} })
+      siteCollection('meta').doc('levelsConfig').set({ levels: levelsList, plans: {} })
         .catch((e) => console.warn('Could not seed levels config', e));
     }
     populateLevelSelect(document.getElementById('entryLevel'));
@@ -1776,48 +2040,75 @@ function attachFirestoreListeners(retriesLeft){
     renderEntries();
   }, handleSyncError);
 
-  entriesUnsub = db.collection('entries').onSnapshot((snapshot) => {
+  siteListenerUnsubs.notificationSettings = siteCollection('meta').doc('notificationSettings').onSnapshot((doc) => {
+    notificationSettings = doc.exists
+      ? { fromName: doc.data().fromName || '', fromEmail: doc.data().fromEmail || '', recipients: doc.data().recipients || [] }
+      : { fromName: '', fromEmail: '', recipients: [] };
+    renderNotificationSettings();
+  }, handleSyncError);
+
+  siteListenerUnsubs.entries = siteCollection('entries').onSnapshot((snapshot) => {
     entries = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderEntries();
     renderDashboard();
   }, handleSyncError);
 
-  tasksUnsub = db.collection('tasks').onSnapshot((snapshot) => {
+  siteListenerUnsubs.tasks = siteCollection('tasks').onSnapshot((snapshot) => {
     tasks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderTasks();
   }, handleSyncError);
 
-  requestsUnsub = db.collection('entryRequests').onSnapshot((snapshot) => {
+  siteListenerUnsubs.requests = siteCollection('entryRequests').onSnapshot((snapshot) => {
     entryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderRequests();
   }, handleSyncError);
 
-  messagesUnsub = db.collection('messages').onSnapshot((snapshot) => {
+  siteListenerUnsubs.messages = siteCollection('messages').onSnapshot((snapshot) => {
     messages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderMessages();
   }, handleSyncError);
 
-  workingLocationsUnsub = db.collection('workingLocations').onSnapshot((snapshot) => {
+  siteListenerUnsubs.workingLocations = siteCollection('workingLocations').onSnapshot((snapshot) => {
     workingLocations = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderWorkingLocations();
     renderTeam();
   }, handleSyncError);
 
-  workersUnsub = db.collection('workers').onSnapshot((snapshot) => {
+  siteListenerUnsubs.workers = siteCollection('workers').onSnapshot((snapshot) => {
     workers = snapshot.docs.map((doc) => ({ id: doc.id, username: doc.id, ...doc.data() }));
     renderTeam();
     renderTasks();
     renderMessages();
+    if(currentSession && !USERS[currentSession.username]){
+      const stillValid = workers.some(w => w.username === currentSession.username && w.active !== false);
+      if(!stillValid) forceLogout('Your account is no longer active. Contact your site manager.');
+    }
   }, handleSyncError);
 
-  locationRequestsUnsub = db.collection('locationRequests').onSnapshot((snapshot) => {
+  siteListenerUnsubs.locationRequests = siteCollection('locationRequests').onSnapshot((snapshot) => {
     locationRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderWorkingLocations();
   }, handleSyncError);
+
+  renderSiteSwitcher();
+  renderSitesManager();
+}
+
+function startSitesSync(){
+  if(sitesSyncStarted) return;
+  sitesSyncStarted = true;
+  sitesUnsub = db.collection('sites').onSnapshot((snapshot) => {
+    sites = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    renderSiteSwitcher();
+    renderSitesManager();
+  }, (err) => console.warn('Sites sync error', err));
 }
 
 auth.onAuthStateChanged((user) => {
-  if(user) startFirestoreSync();
+  if(user){
+    startSitesSync();
+    if(!tryRestoreSession()) showLockScreen();
+  }
 });
 auth.signInAnonymously().catch((err) => {
   console.error('Anonymous sign-in failed', err);
@@ -1848,6 +2139,199 @@ function renderProject(){
   document.getElementById('progressBarInner').style.width = pct + '%';
   document.getElementById('projectPill').textContent = project.name ? project.name : '';
 }
+
+function renderSiteSwitcher(){
+  const switcherEl = document.getElementById('siteSwitcherBtn');
+  const pillEl = document.getElementById('projectPill');
+  if(isManagement() && sites.length > 1){
+    const current = sites.find(s => s.id === currentSiteId);
+    switcherEl.textContent = `🏗️ ${current ? current.name : 'Choose site'} ▾`;
+    switcherEl.style.display = '';
+    pillEl.style.display = 'none';
+  } else {
+    switcherEl.style.display = 'none';
+    pillEl.style.display = '';
+  }
+}
+document.getElementById('siteSwitcherBtn').onclick = () => showSitePicker();
+
+function showSitePicker(){
+  const listEl = document.getElementById('sitePickerList');
+  listEl.innerHTML = sites.map(s => `
+    <button type="button" class="site-picker-item" onclick="pickSite('${s.id}')">
+      <span>${escapeHtml(s.name || 'Untitled site')}${s.id === currentSiteId ? ' (current)' : ''}</span>
+      <span class="arrow">›</span>
+    </button>
+  `).join('');
+  document.getElementById('sitePickerScreen').style.display = 'flex';
+}
+function hideSitePicker(){
+  document.getElementById('sitePickerScreen').style.display = 'none';
+}
+function pickSite(siteId){
+  enterApp(siteId);
+}
+window.pickSite = pickSite;
+
+function renderSitesManager(){
+  const listEl = document.getElementById('sitesManagerList');
+  if(!listEl) return;
+  if(!sites.length){
+    listEl.innerHTML = '<div class="empty">No sites yet — create the first one below.</div>';
+    return;
+  }
+  listEl.innerHTML = sites.map(s => `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <span style="font-weight:600;">${escapeHtml(s.name || 'Untitled site')}${s.id === currentSiteId ? ' <span style="color:var(--accent); font-weight:700;">(current)</span>' : ''}</span>
+      <button type="button" class="danger small" onclick="removeSite('${s.id}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+async function removeSite(siteId){
+  if(sites.length <= 1){
+    alert('You can\'t remove the only site — create another one first.');
+    return;
+  }
+  const site = sites.find(s => s.id === siteId);
+  if(!confirm(`Permanently delete "${site ? site.name : 'this site'}"? This deletes every entry, task, worker, and message in it. This cannot be undone.`)) return;
+  try{
+    const subcols = ['entries','tasks','entryRequests','messages','workingLocations','workers','locationRequests','pushTokens','meta'];
+    for(const c of subcols){
+      const snap = await db.collection('sites').doc(siteId).collection(c).get();
+      for(const d of snap.docs){
+        await d.ref.delete();
+      }
+    }
+    await db.collection('sites').doc(siteId).delete();
+    if(siteId === currentSiteId){
+      const fallback = sites.find(s => s.id !== siteId);
+      if(fallback) switchToSite(fallback.id);
+    }
+  }catch(err){
+    alert('Failed to remove site: ' + err.message);
+  }
+}
+window.removeSite = removeSite;
+
+async function createSite(){
+  const nameInput = document.getElementById('newSiteNameInput');
+  const name = nameInput.value.trim();
+  if(!name){ alert('Enter a name for the new site.'); return; }
+  const addBtn = document.getElementById('addSiteBtn');
+  addBtn.disabled = true;
+  try{
+    const newSiteRef = await db.collection('sites').add({
+      name,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentSession ? currentSession.username : null
+    });
+    await newSiteRef.collection('meta').doc('levelsConfig').set({ levels: LEVELS.slice(), plans: {} });
+    await newSiteRef.collection('meta').doc('entryTypesConfig').set({ types: DEFAULT_ENTRY_TYPES.slice() });
+    nameInput.value = '';
+    switchToSite(newSiteRef.id);
+  }catch(err){
+    console.error('Could not create site', err);
+    alert('Could not create the new site: ' + err.message);
+  }finally{
+    addBtn.disabled = false;
+  }
+}
+document.getElementById('addSiteBtn').onclick = createSite;
+document.getElementById('newSiteNameInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') createSite();
+});
+
+function renderNotificationSettings(){
+  const nameEl = document.getElementById('notifyFromName');
+  const emailEl = document.getElementById('notifyFromEmail');
+  const listEl = document.getElementById('notifyRecipientsList');
+  if(!nameEl || !listEl) return;
+  nameEl.value = notificationSettings.fromName || '';
+  emailEl.value = notificationSettings.fromEmail || '';
+  if(!notificationSettings.recipients || !notificationSettings.recipients.length){
+    listEl.innerHTML = '<div class="empty">No recipients yet — add one below.</div>';
+    return;
+  }
+  listEl.innerHTML = notificationSettings.recipients.map((email, i) => `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <span>${escapeHtml(email)}</span>
+      <button type="button" class="danger small" onclick="removeRecipientEmail(${i})">Remove</button>
+    </div>
+  `).join('');
+}
+
+async function saveNotificationFrom(){
+  const fromName = document.getElementById('notifyFromName').value.trim();
+  const fromEmail = document.getElementById('notifyFromEmail').value.trim();
+  if(fromEmail && !EMAIL_REGEX.test(fromEmail)){
+    alert('Enter a valid "from" email address.');
+    return;
+  }
+  const btn = document.getElementById('saveNotifyFromBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  try{
+    await siteCollection('meta').doc('notificationSettings').set({
+      fromName, fromEmail, recipients: notificationSettings.recipients || []
+    }, { merge: true });
+    btn.textContent = '✅ Saved';
+    setTimeout(() => { btn.textContent = originalText; }, 1800);
+  }catch(err){
+    alert('Failed to save sender: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('saveNotifyFromBtn').onclick = saveNotificationFrom;
+
+async function addRecipientEmail(){
+  const input = document.getElementById('newRecipientEmailInput');
+  const email = input.value.trim();
+  if(!email) return;
+  if(!EMAIL_REGEX.test(email)){
+    alert('Enter a valid email address.');
+    return;
+  }
+  const current = notificationSettings.recipients || [];
+  if(current.includes(email)){
+    alert('That email is already on the list.');
+    return;
+  }
+  if(current.length >= 10){
+    alert('You can have up to 10 recipients — remove one first.');
+    return;
+  }
+  try{
+    await siteCollection('meta').doc('notificationSettings').set({
+      fromName: notificationSettings.fromName || '',
+      fromEmail: notificationSettings.fromEmail || '',
+      recipients: current.concat([email])
+    }, { merge: true });
+    input.value = '';
+  }catch(err){
+    alert('Failed to add recipient: ' + err.message);
+  }
+}
+document.getElementById('addRecipientBtn').onclick = addRecipientEmail;
+document.getElementById('newRecipientEmailInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') addRecipientEmail();
+});
+
+async function removeRecipientEmail(index){
+  const updated = (notificationSettings.recipients || []).slice();
+  updated.splice(index, 1);
+  try{
+    await siteCollection('meta').doc('notificationSettings').set({
+      fromName: notificationSettings.fromName || '',
+      fromEmail: notificationSettings.fromEmail || '',
+      recipients: updated
+    }, { merge: true });
+  }catch(err){
+    alert('Failed to remove recipient: ' + err.message);
+  }
+}
+window.removeRecipientEmail = removeRecipientEmail;
 
 function renderPhotoGrid(gridId, photosArray){
   const grid = document.getElementById(gridId);
@@ -1927,7 +2411,7 @@ function renderEntryTypesManager(){
 
 async function saveEntryTypesConfig(){
   try{
-    await db.collection('meta').doc('entryTypesConfig').set({ types: entryTypesList });
+    await siteCollection('meta').doc('entryTypesConfig').set({ types: entryTypesList });
   }catch(err){
     alert('Failed to save entry types: ' + err.message);
   }
@@ -2450,7 +2934,7 @@ window.shareEntryWithPdf = shareEntryWithPdf;
 async function deleteEntry(id){
   if(!confirm('Delete this entry?')) return;
   try{
-    await db.collection('entries').doc(id).delete();
+    await siteCollection('entries').doc(id).delete();
     lsRemove(LS_MEDIA_PREFIX + id);
   }catch(err){
     alert('Failed to delete entry: ' + err.message);
@@ -2465,10 +2949,17 @@ document.getElementById('saveProjectBtn').onclick = async () => {
     finishDate: document.getElementById('finishDate').value,
     progress: document.getElementById('progressPercent').value
   };
+  const btn = document.getElementById('saveProjectBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
   try{
-    await db.collection('meta').doc('project').set(newProject);
+    await siteCollection('meta').doc('project').set(newProject);
+    btn.textContent = '✅ Saved';
+    setTimeout(() => { btn.textContent = originalText; }, 1800);
   }catch(err){
     alert('Failed to save project details: ' + err.message);
+  }finally{
+    btn.disabled = false;
   }
 };
 
@@ -2717,7 +3208,7 @@ document.getElementById('addEntryBtn').onclick = async () => {
   addBtn.textContent = editingEntryId ? 'Updating...' : 'Saving...';
 
   try{
-    const entryId = editingEntryId || db.collection('entries').doc().id;
+    const entryId = editingEntryId || siteCollection('entries').doc().id;
 
     const photoDataUrls = currentPhotos.map(p => p.preview);
     const photosBytes = photoDataUrls.reduce((sum, p) => sum + p.length, 0);
@@ -2760,12 +3251,12 @@ document.getElementById('addEntryBtn').onclick = async () => {
 
     const wasEditing = !!editingEntryId;
     if(wasEditing){
-      await db.collection('entries').doc(entryId).update(entryData);
+      await siteCollection('entries').doc(entryId).update(entryData);
     } else {
       entryData.completed = false;
       entryData.comments = [];
       entryData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-      await db.collection('entries').doc(entryId).set(entryData);
+      await siteCollection('entries').doc(entryId).set(entryData);
     }
 
     resetEntryForm();
@@ -2807,7 +3298,7 @@ document.getElementById('statusFilters').addEventListener('click', (ev) => {
 
 async function toggleComplete(id, makeComplete){
   try{
-    await db.collection('entries').doc(id).update({ completed: makeComplete });
+    await siteCollection('entries').doc(id).update({ completed: makeComplete });
   }catch(err){
     alert('Failed to update status: ' + err.message);
   }
@@ -2819,7 +3310,7 @@ async function addComment(id){
   const text = input.value.trim();
   if(!text) return;
   try{
-    await db.collection('entries').doc(id).update({
+    await siteCollection('entries').doc(id).update({
       comments: firebase.firestore.FieldValue.arrayUnion({ text, dateTime: new Date().toISOString() })
     });
     input.value = '';
@@ -2880,7 +3371,7 @@ document.getElementById('assignTaskBtn').onclick = async () => {
   btn.disabled = true;
   btn.textContent = 'Sending...';
   try{
-    await db.collection('tasks').add({
+    await siteCollection('tasks').add({
       message,
       photos,
       targetRole,
@@ -2902,6 +3393,18 @@ document.getElementById('assignTaskBtn').onclick = async () => {
     } else {
       sendPushNotification([targetRole], `New task from ${currentSession.name}`, notifyBody);
     }
+    const targetLabel = targetUsername
+      ? ((workers.find(w => w.username === targetUsername) || {}).name || targetUsername)
+      : TARGET_ROLE_LABELS[targetRole || 'labourer'];
+    const assignSubject = `Task assigned: ${(message || 'Task').slice(0, 60)}`;
+    const assignLines = [
+      `<strong>Task:</strong> ${escapeHtml(message || '')}`,
+      `<strong>Assigned by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
+      `<strong>Assigned to:</strong> ${escapeHtml(targetLabel)}`,
+      `<strong>Started:</strong> ${new Date().toLocaleString()}`
+    ];
+    notifySiteRecipients(assignSubject, assignLines);
+    notifyEmails.forEach(addr => sendSummaryEmail(addr, assignSubject, assignLines));
   }catch(err){
     alert('Failed to send task: ' + err.message);
   }finally{
@@ -2957,6 +3460,7 @@ function renderTasks(){
           ${photosHtml}
           <div class="entry-actions">
             <button type="button" class="secondary small" onclick="toggleTaskComplete('${t.id}', ${t.completed ? 'false' : 'true'})">${t.completed ? '↩️ Reopen' : '✅ Mark Complete'}</button>
+            ${isManagement() ? `<button type="button" class="danger small" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
           </div>
           <div class="section-label" style="margin-top:14px;">Responses</div>
           <div class="comments-list">${commentsHtml}</div>
@@ -2987,7 +3491,7 @@ async function toggleTaskComplete(id, makeComplete){
       update.completedByUsername = null;
       update.completedAt = null;
     }
-    await db.collection('tasks').doc(id).update(update);
+    await siteCollection('tasks').doc(id).update(update);
     if(makeComplete){
       const task = tasks.find(t => t.id === id);
       if(task){
@@ -3009,7 +3513,7 @@ async function toggleTaskComplete(id, makeComplete){
           `<strong>Completed by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
           lastComment ? `<strong>Latest update:</strong> ${escapeHtml(lastComment.text || '')}` : ''
         ];
-        sendSummaryEmailToVal(subject, lines);
+        notifySiteRecipients(subject, lines);
         (task.notifyEmails || []).forEach(addr => sendSummaryEmail(addr, subject, lines));
       }
     }
@@ -3018,6 +3522,16 @@ async function toggleTaskComplete(id, makeComplete){
   }
 }
 window.toggleTaskComplete = toggleTaskComplete;
+
+async function deleteTask(id){
+  if(!confirm('Delete this task? This cannot be undone.')) return;
+  try{
+    await siteCollection('tasks').doc(id).delete();
+  }catch(err){
+    alert('Failed to delete task: ' + err.message);
+  }
+}
+window.deleteTask = deleteTask;
 
 async function sendTaskResponse(id, photoDataUrl){
   const input = document.getElementById('taskCommentInput-' + id);
@@ -3032,7 +3546,7 @@ async function sendTaskResponse(id, photoDataUrl){
       role: currentSession ? currentSession.roleLabel : '',
       dateTime: new Date().toISOString()
     };
-    await db.collection('tasks').doc(id).update({
+    await siteCollection('tasks').doc(id).update({
       comments: firebase.firestore.FieldValue.arrayUnion(comment)
     });
     if(input) input.value = '';
@@ -3089,7 +3603,7 @@ document.getElementById('submitRequestBtn').onclick = async () => {
   btn.disabled = true;
   btn.textContent = 'Sending...';
   try{
-    await db.collection('entryRequests').add({
+    await siteCollection('entryRequests').add({
       type, level, area, notes, photos,
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
@@ -3165,7 +3679,7 @@ async function useRequestForEntry(id){
   const r = entryRequests.find(x => x.id === id);
   if(!r) return;
   try{
-    await db.collection('entryRequests').doc(id).update({ status: 'accepted' });
+    await siteCollection('entryRequests').doc(id).update({ status: 'accepted' });
     sendPushNotification(['labourer'], 'Your request was accepted', `${currentSession.name} is turning it into a log entry.`);
   }catch(err){
     alert('Failed to update request: ' + err.message);
@@ -3186,7 +3700,7 @@ window.useRequestForEntry = useRequestForEntry;
 
 async function dismissRequest(id){
   try{
-    await db.collection('entryRequests').doc(id).update({ status: 'dismissed' });
+    await siteCollection('entryRequests').doc(id).update({ status: 'dismissed' });
     sendPushNotification(['labourer'], 'Your request was dismissed', `${currentSession.name} reviewed it but didn't create a log entry.`);
   }catch(err){
     alert('Failed to dismiss request: ' + err.message);
@@ -3313,7 +3827,7 @@ async function markConversationRead(withUsername){
   if(unread.length === 0) return;
   try{
     const batch = db.batch();
-    unread.forEach(m => batch.update(db.collection('messages').doc(m.id), { read: true }));
+    unread.forEach(m => batch.update(siteCollection('messages').doc(m.id), { read: true }));
     await batch.commit();
   }catch(err){
     console.warn('Could not mark messages read', err);
@@ -3327,7 +3841,7 @@ document.getElementById('sendMessageBtn').onclick = async () => {
   const btn = document.getElementById('sendMessageBtn');
   btn.disabled = true;
   try{
-    await db.collection('messages').add({
+    await siteCollection('messages').add({
       text,
       fromUsername: currentSession.username,
       fromName: currentSession.name,
@@ -3365,7 +3879,7 @@ document.getElementById('submitLocationBtn').onclick = async () => {
   const btn = document.getElementById('submitLocationBtn');
   btn.disabled = true;
   try{
-    await db.collection('workingLocations').add({
+    await siteCollection('workingLocations').add({
       trade: currentSession.role,
       tradeLabel: currentSession.roleLabel,
       workerUsername: currentSession.username,
@@ -3381,7 +3895,7 @@ document.getElementById('submitLocationBtn').onclick = async () => {
     const pending = myPendingLocationRequests();
     if(pending.length){
       const batch = db.batch();
-      pending.forEach(r => batch.update(db.collection('locationRequests').doc(r.id), { fulfilled: true }));
+      pending.forEach(r => batch.update(siteCollection('locationRequests').doc(r.id), { fulfilled: true }));
       await batch.commit();
     }
     document.getElementById('locationLevel').value = '';
@@ -3525,7 +4039,7 @@ async function sendLocationReply(id){
       role: currentSession.roleLabel,
       dateTime: new Date().toISOString()
     };
-    await db.collection('workingLocations').doc(id).update({
+    await siteCollection('workingLocations').doc(id).update({
       comments: firebase.firestore.FieldValue.arrayUnion(comment)
     });
     if(input) input.value = '';
@@ -3550,13 +4064,13 @@ window.sendLocationReply = sendLocationReply;
 async function finishLocation(id){
   try{
     const loc = workingLocations.find(l => l.id === id);
-    await db.collection('workingLocations').doc(id).update({
+    await siteCollection('workingLocations').doc(id).update({
       active: false,
       finishedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     if(loc){
       const durationMs = Math.max(0, new Date() - (loc.createdAt && loc.createdAt.toDate ? loc.createdAt.toDate() : new Date()));
-      sendSummaryEmailToVal(
+      notifySiteRecipients(
         `${loc.workerName || loc.tradeLabel} finished at ${loc.level}`,
         [
           `<strong>${escapeHtml(loc.workerName || loc.tradeLabel)}</strong> (${escapeHtml(loc.tradeLabel)}) just finished their check-in.`,
@@ -3578,6 +4092,38 @@ function dayRange(dateStr){
     start: new Date(y, m - 1, d, 0, 0, 0, 0),
     end: new Date(y, m - 1, d, 23, 59, 59, 999)
   };
+}
+
+function reportRange(dateStr, period){
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if(period === 'weekly'){
+    const base = new Date(y, m - 1, d);
+    const day = base.getDay();
+    const mondayOffset = (day === 0 ? -6 : 1 - day);
+    const start = new Date(y, m - 1, d + mondayOffset, 0, 0, 0, 0);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999);
+    return { start, end };
+  }
+  if(period === 'monthly'){
+    return {
+      start: new Date(y, m - 1, 1, 0, 0, 0, 0),
+      end: new Date(y, m, 0, 23, 59, 59, 999)
+    };
+  }
+  return dayRange(dateStr);
+}
+
+function reportPeriodLabel(dateStr, period, start, end){
+  const fmt = dt => dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  if(period === 'weekly') return `Week of ${fmt(start)} – ${fmt(end)}`;
+  if(period === 'monthly') return start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  return dateStr;
+}
+
+function reportFileTag(period, start){
+  if(period === 'weekly') return `Week-${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+  if(period === 'monthly') return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+  return start.toISOString().slice(0, 10);
 }
 
 function downloadReportExcel(rows, fileName, sheetName, colWidths){
@@ -3621,212 +4167,263 @@ function downloadReportPdf(title, subtitle, rows, fileName){
   doc.save(fileName);
 }
 
-function buildLocationsDayRows(dateStr){
-  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
-  const dayEntries = workingLocations
+function buildLocationsReportRows(dateStr, period){
+  const { start, end } = reportRange(dateStr, period);
+  const rangeEntries = workingLocations
     .filter(l => {
-      const start = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
-      return start && start >= dayStart && start <= dayEnd;
+      const s = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
+      return s && s >= start && s <= end;
     })
     .sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
 
-  return dayEntries.map(l => {
-    const start = l.createdAt.toDate();
-    const end = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate() : null;
+  return rangeEntries.map(l => {
+    const s = l.createdAt.toDate();
+    const e = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate() : null;
     const replies = (l.comments || []).map(c => `${c.author}: ${c.text}`).join(' | ');
-    return {
-      'Name': l.workerName || l.tradeLabel || '',
-      'Trade': l.tradeLabel || '',
-      'Level': l.level || '',
-      'Description': l.description || '',
-      'Check In': start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      'Check Out': end ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (l.active === false ? '' : 'Still checked in'),
-      'Duration': formatDuration(sessionDurationMs(l)),
-      'Replies': replies
-    };
+    const row = {};
+    if(period !== 'daily') row['Date'] = s.toLocaleDateString('en-GB');
+    row['Name'] = l.workerName || l.tradeLabel || '';
+    row['Trade'] = l.tradeLabel || '';
+    row['Level'] = l.level || '';
+    row['Description'] = l.description || '';
+    row['Check In'] = s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    row['Check Out'] = e ? e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (l.active === false ? '' : 'Still checked in');
+    row['Duration'] = formatDuration(sessionDurationMs(l));
+    row['Replies'] = replies;
+    return row;
   });
+}
+
+function locationsReportWidths(period){
+  const base = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 45 }];
+  return period !== 'daily' ? [{ wch: 12 }].concat(base) : base;
 }
 
 document.getElementById('exportDayBtn').onclick = () => {
   const dateStr = document.getElementById('exportDayDate').value;
+  const period = document.getElementById('exportDayPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildLocationsDayRows(dateStr);
-  if(rows.length === 0){ alert('No activity recorded for that day.'); return; }
-  downloadReportExcel(rows, `Delmond Locations ${dateStr}.xlsx`, 'Daily Report',
-    [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 45 }]);
+  const rows = buildLocationsReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No activity recorded for that period.'); return; }
+  const { start } = reportRange(dateStr, period);
+  downloadReportExcel(rows, `Delmond Locations ${reportFileTag(period, start)}.xlsx`, period.charAt(0).toUpperCase() + period.slice(1) + ' Report', locationsReportWidths(period));
 };
 
 document.getElementById('exportDayPdfBtn').onclick = () => {
   const dateStr = document.getElementById('exportDayDate').value;
+  const period = document.getElementById('exportDayPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildLocationsDayRows(dateStr);
-  if(rows.length === 0){ alert('No activity recorded for that day.'); return; }
-  downloadReportPdf('Delmond Site Log — Locations Report', dateStr, rows, `Delmond Locations ${dateStr}.pdf`);
+  const rows = buildLocationsReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No activity recorded for that period.'); return; }
+  const { start, end } = reportRange(dateStr, period);
+  downloadReportPdf('Delmond Site Log — Locations Report', reportPeriodLabel(dateStr, period, start, end), rows, `Delmond Locations ${reportFileTag(period, start)}.pdf`);
 };
 
-// ---- Daily Report: Log ----
+// ---- Report: Log ----
 
-function buildLogDayRows(dateStr){
-  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
-  const dayEntries = entries
+function buildLogReportRows(dateStr, period){
+  const { start, end } = reportRange(dateStr, period);
+  const rangeEntries = entries
     .filter(e => {
       const dt = new Date(e.dateTime);
-      return !isNaN(dt) && dt >= dayStart && dt <= dayEnd;
+      return !isNaN(dt) && dt >= start && dt <= end;
     })
     .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
 
-  return dayEntries.map(e => ({
-    'Time': new Date(e.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    'Type': typeLabel(e.type),
-    'Level': e.level || '',
-    'Area': e.area || '',
-    'Task Type': e.taskType || '',
-    'Progress': (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '',
-    'Notes': e.notes || '',
-    'Status': e.completed ? 'Completed' : 'Active'
-  }));
+  return rangeEntries.map(e => {
+    const dt = new Date(e.dateTime);
+    const row = {};
+    if(period !== 'daily') row['Date'] = dt.toLocaleDateString('en-GB');
+    row['Time'] = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    row['Type'] = typeLabel(e.type);
+    row['Level'] = e.level || '';
+    row['Area'] = e.area || '';
+    row['Task Type'] = e.taskType || '';
+    row['Progress'] = (e.progress !== undefined && e.progress !== '') ? e.progress + '%' : '';
+    row['Notes'] = e.notes || '';
+    row['Status'] = e.completed ? 'Completed' : 'Active';
+    return row;
+  });
+}
+
+function logReportWidths(period){
+  const base = [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 45 }, { wch: 12 }];
+  return period !== 'daily' ? [{ wch: 12 }].concat(base) : base;
 }
 
 document.getElementById('logReportExcelBtn').onclick = () => {
   const dateStr = document.getElementById('logReportDate').value;
+  const period = document.getElementById('logReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildLogDayRows(dateStr);
-  if(rows.length === 0){ alert('No log entries recorded for that day.'); return; }
-  downloadReportExcel(rows, `Delmond Log ${dateStr}.xlsx`, 'Daily Report',
-    [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 45 }, { wch: 12 }]);
+  const rows = buildLogReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No log entries recorded for that period.'); return; }
+  const { start } = reportRange(dateStr, period);
+  downloadReportExcel(rows, `Delmond Log ${reportFileTag(period, start)}.xlsx`, period.charAt(0).toUpperCase() + period.slice(1) + ' Report', logReportWidths(period));
 };
 
 document.getElementById('logReportPdfBtn').onclick = () => {
   const dateStr = document.getElementById('logReportDate').value;
+  const period = document.getElementById('logReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildLogDayRows(dateStr);
-  if(rows.length === 0){ alert('No log entries recorded for that day.'); return; }
-  downloadReportPdf('Delmond Site Log — Log Entries Report', dateStr, rows, `Delmond Log ${dateStr}.pdf`);
+  const rows = buildLogReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No log entries recorded for that period.'); return; }
+  const { start, end } = reportRange(dateStr, period);
+  downloadReportPdf('Delmond Site Log — Log Entries Report', reportPeriodLabel(dateStr, period, start, end), rows, `Delmond Log ${reportFileTag(period, start)}.pdf`);
 };
 
-// ---- Daily Report: Tasks ----
+// ---- Report: Tasks ----
 
-function buildTasksDayRows(dateStr){
-  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
-  const dayTasks = tasks
+function buildTasksReportRows(dateStr, period){
+  const { start, end } = reportRange(dateStr, period);
+  const rangeTasks = tasks
     .filter(t => {
       const dt = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
-      return dt && dt >= dayStart && dt <= dayEnd;
+      return dt && dt >= start && dt <= end;
     })
     .sort((a, b) => tsOf(a.createdAt) - tsOf(b.createdAt));
 
-  return dayTasks.map(t => ({
-    'Time': t.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    'Message': t.message || '',
-    'Sent To': t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'],
-    'Assigned By': t.assignedByName || '',
-    'Status': t.completed ? 'Completed' : 'Active',
-    'Responses': (t.comments || []).length
-  }));
+  return rangeTasks.map(t => {
+    const dt = t.createdAt.toDate();
+    const row = {};
+    if(period !== 'daily') row['Date'] = dt.toLocaleDateString('en-GB');
+    row['Time'] = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    row['Message'] = t.message || '';
+    row['Sent To'] = t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'];
+    row['Assigned By'] = t.assignedByName || '';
+    row['Status'] = t.completed ? 'Completed' : 'Active';
+    row['Responses'] = (t.comments || []).length;
+    return row;
+  });
+}
+
+function tasksReportWidths(period){
+  const base = [{ wch: 10 }, { wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 10 }];
+  return period !== 'daily' ? [{ wch: 12 }].concat(base) : base;
 }
 
 document.getElementById('tasksReportExcelBtn').onclick = () => {
   const dateStr = document.getElementById('tasksReportDate').value;
+  const period = document.getElementById('tasksReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildTasksDayRows(dateStr);
-  if(rows.length === 0){ alert('No tasks assigned on that day.'); return; }
-  downloadReportExcel(rows, `Delmond Tasks ${dateStr}.xlsx`, 'Daily Report',
-    [{ wch: 10 }, { wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 10 }]);
+  const rows = buildTasksReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No tasks assigned in that period.'); return; }
+  const { start } = reportRange(dateStr, period);
+  downloadReportExcel(rows, `Delmond Tasks ${reportFileTag(period, start)}.xlsx`, period.charAt(0).toUpperCase() + period.slice(1) + ' Report', tasksReportWidths(period));
 };
 
 document.getElementById('tasksReportPdfBtn').onclick = () => {
   const dateStr = document.getElementById('tasksReportDate').value;
+  const period = document.getElementById('tasksReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildTasksDayRows(dateStr);
-  if(rows.length === 0){ alert('No tasks assigned on that day.'); return; }
-  downloadReportPdf('Delmond Site Log — Tasks Report', dateStr, rows, `Delmond Tasks ${dateStr}.pdf`);
+  const rows = buildTasksReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No tasks assigned in that period.'); return; }
+  const { start, end } = reportRange(dateStr, period);
+  downloadReportPdf('Delmond Site Log — Tasks Report', reportPeriodLabel(dateStr, period, start, end), rows, `Delmond Tasks ${reportFileTag(period, start)}.pdf`);
 };
 
-// ---- Daily Report: Team ----
+// ---- Report: Team ----
 
-function buildTeamDayRows(dateStr){
-  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
+function buildTeamReportRows(dateStr, period){
+  const { start, end } = reportRange(dateStr, period);
   const activeWorkers = [...workers].filter(w => w.active !== false).sort((a, b) => a.name.localeCompare(b.name));
 
   return activeWorkers.map(w => {
-    const dayLocs = workingLocations.filter(l => {
+    const rangeLocs = workingLocations.filter(l => {
       const dt = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
-      return l.workerUsername === w.username && dt && dt >= dayStart && dt <= dayEnd;
+      return l.workerUsername === w.username && dt && dt >= start && dt <= end;
     });
-    const hoursMs = dayLocs.reduce((sum, l) => sum + sessionDurationMs(l), 0);
+    const hoursMs = rangeLocs.reduce((sum, l) => sum + sessionDurationMs(l), 0);
     const responses = tasks.reduce((sum, t) => sum + (t.comments || []).filter(c => {
       const cd = new Date(c.dateTime);
-      return c.authorUsername === w.username && !isNaN(cd) && cd >= dayStart && cd <= dayEnd;
+      return c.authorUsername === w.username && !isNaN(cd) && cd >= start && cd <= end;
     }).length, 0);
-    return {
-      'Name': w.name,
-      'Trade': TRADE_LABELS[w.trade] || w.trade,
-      'Checked In': dayLocs.length > 0 ? 'Yes' : 'No',
-      'Hours': formatDuration(hoursMs),
-      'Task Responses': responses
-    };
+    const row = { 'Name': w.name, 'Trade': TRADE_LABELS[w.trade] || w.trade };
+    if(period === 'daily'){
+      row['Checked In'] = rangeLocs.length > 0 ? 'Yes' : 'No';
+    } else {
+      row['Days Worked'] = new Set(rangeLocs.map(l => l.createdAt.toDate().toDateString())).size;
+    }
+    row['Hours'] = formatDuration(hoursMs);
+    row['Task Responses'] = responses;
+    return row;
   });
 }
 
 document.getElementById('teamReportExcelBtn').onclick = () => {
   const dateStr = document.getElementById('teamReportDate').value;
+  const period = document.getElementById('teamReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildTeamDayRows(dateStr);
+  const rows = buildTeamReportRows(dateStr, period);
   if(rows.length === 0){ alert('No active workers to report on.'); return; }
-  downloadReportExcel(rows, `Delmond Team ${dateStr}.xlsx`, 'Daily Report',
+  const { start } = reportRange(dateStr, period);
+  downloadReportExcel(rows, `Delmond Team ${reportFileTag(period, start)}.xlsx`, period.charAt(0).toUpperCase() + period.slice(1) + ' Report',
     [{ wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }]);
 };
 
 document.getElementById('teamReportPdfBtn').onclick = () => {
   const dateStr = document.getElementById('teamReportDate').value;
+  const period = document.getElementById('teamReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildTeamDayRows(dateStr);
+  const rows = buildTeamReportRows(dateStr, period);
   if(rows.length === 0){ alert('No active workers to report on.'); return; }
-  downloadReportPdf('Delmond Site Log — Team Report', dateStr, rows, `Delmond Team ${dateStr}.pdf`);
+  const { start, end } = reportRange(dateStr, period);
+  downloadReportPdf('Delmond Site Log — Team Report', reportPeriodLabel(dateStr, period, start, end), rows, `Delmond Team ${reportFileTag(period, start)}.pdf`);
 };
 
-// ---- Daily Report: Requests ----
+// ---- Report: Requests ----
 
-function buildRequestsDayRows(dateStr){
-  const { start: dayStart, end: dayEnd } = dayRange(dateStr);
-  const dayReqs = entryRequests
+function buildRequestsReportRows(dateStr, period){
+  const { start, end } = reportRange(dateStr, period);
+  const rangeReqs = entryRequests
     .filter(r => {
       const dt = r.submittedAt && r.submittedAt.toDate ? r.submittedAt.toDate() : null;
-      return dt && dt >= dayStart && dt <= dayEnd;
+      return dt && dt >= start && dt <= end;
     })
     .sort((a, b) => tsOf(a.submittedAt) - tsOf(b.submittedAt));
 
-  return dayReqs.map(r => ({
-    'Time': r.submittedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    'Type': typeLabel(r.type),
-    'Level': r.level || '',
-    'Area': r.area || '',
-    'Notes': r.notes || '',
-    'Status': r.status.charAt(0).toUpperCase() + r.status.slice(1),
-    'Submitted By': r.submittedByName || ''
-  }));
+  return rangeReqs.map(r => {
+    const dt = r.submittedAt.toDate();
+    const row = {};
+    if(period !== 'daily') row['Date'] = dt.toLocaleDateString('en-GB');
+    row['Time'] = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    row['Type'] = typeLabel(r.type);
+    row['Level'] = r.level || '';
+    row['Area'] = r.area || '';
+    row['Notes'] = r.notes || '';
+    row['Status'] = r.status.charAt(0).toUpperCase() + r.status.slice(1);
+    row['Submitted By'] = r.submittedByName || '';
+    return row;
+  });
+}
+
+function requestsReportWidths(period){
+  const base = [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 45 }, { wch: 10 }, { wch: 16 }];
+  return period !== 'daily' ? [{ wch: 12 }].concat(base) : base;
 }
 
 document.getElementById('requestsReportExcelBtn').onclick = () => {
   const dateStr = document.getElementById('requestsReportDate').value;
+  const period = document.getElementById('requestsReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildRequestsDayRows(dateStr);
-  if(rows.length === 0){ alert('No requests submitted on that day.'); return; }
-  downloadReportExcel(rows, `Delmond Requests ${dateStr}.xlsx`, 'Daily Report',
-    [{ wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 45 }, { wch: 10 }, { wch: 16 }]);
+  const rows = buildRequestsReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No requests submitted in that period.'); return; }
+  const { start } = reportRange(dateStr, period);
+  downloadReportExcel(rows, `Delmond Requests ${reportFileTag(period, start)}.xlsx`, period.charAt(0).toUpperCase() + period.slice(1) + ' Report', requestsReportWidths(period));
 };
 
 document.getElementById('requestsReportPdfBtn').onclick = () => {
   const dateStr = document.getElementById('requestsReportDate').value;
+  const period = document.getElementById('requestsReportPeriod').value;
   if(!dateStr){ alert('Pick a date first.'); return; }
-  const rows = buildRequestsDayRows(dateStr);
-  if(rows.length === 0){ alert('No requests submitted on that day.'); return; }
-  downloadReportPdf('Delmond Site Log — Requests Report', dateStr, rows, `Delmond Requests ${dateStr}.pdf`);
+  const rows = buildRequestsReportRows(dateStr, period);
+  if(rows.length === 0){ alert('No requests submitted in that period.'); return; }
+  const { start, end } = reportRange(dateStr, period);
+  downloadReportPdf('Delmond Site Log — Requests Report', reportPeriodLabel(dateStr, period, start, end), rows, `Delmond Requests ${reportFileTag(period, start)}.pdf`);
 };
 
 async function requestTradeCheckIn(trade){
   try{
-    await db.collection('locationRequests').add({
+    await siteCollection('locationRequests').add({
       targetTrade: trade,
       requestedByName: currentSession.name,
       requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3842,7 +4439,7 @@ window.requestTradeCheckIn = requestTradeCheckIn;
 
 async function requestWorkerCheckIn(username){
   try{
-    await db.collection('locationRequests').add({
+    await siteCollection('locationRequests').add({
       targetUsername: username,
       requestedByName: currentSession.name,
       requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3866,7 +4463,7 @@ async function sendPdfToLocation(locationId, inputEl){
   try{
     const canvas = await renderPdfFirstPageToCanvas(file);
     const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
-    await db.collection('tasks').add({
+    await siteCollection('tasks').add({
       message: `Drawing/document for ${loc.level}`,
       photos: [dataUrl],
       targetRole: loc.trade,
@@ -3901,7 +4498,7 @@ document.getElementById('addWorkerBtn').onclick = async () => {
     alert('Fill in a name, username, and password.');
     return;
   }
-  if(USERS[username] || workers.some(w => w.username === username)){
+  if(USERS[username]){
     alert('That username is already taken — choose another.');
     return;
   }
@@ -3909,7 +4506,12 @@ document.getElementById('addWorkerBtn').onclick = async () => {
   const btn = document.getElementById('addWorkerBtn');
   btn.disabled = true;
   try{
-    await db.collection('workers').doc(username).set({
+    const existing = await db.collectionGroup('workers').where('username', '==', username).limit(1).get();
+    if(!existing.empty){
+      alert('That username is already taken (in this or another site) — choose another.');
+      return;
+    }
+    await siteCollection('workers').doc(username).set({
       name,
       trade,
       username,
@@ -4157,7 +4759,7 @@ function renderWorkerProfile(){
 
 async function toggleWorkerActive(username, makeActive){
   try{
-    await db.collection('workers').doc(username).update({ active: makeActive });
+    await siteCollection('workers').doc(username).update({ active: makeActive });
   }catch(err){
     alert('Failed to update worker: ' + err.message);
   }
@@ -4167,7 +4769,7 @@ window.toggleWorkerActive = toggleWorkerActive;
 async function removeWorker(username){
   if(!confirm('Remove this worker\'s login? Their check-in and task history will be kept, but they will no longer be able to sign in.')) return;
   try{
-    await db.collection('workers').doc(username).delete();
+    await siteCollection('workers').doc(username).delete();
   }catch(err){
     alert('Failed to remove worker: ' + err.message);
   }
@@ -4358,7 +4960,7 @@ document.getElementById('weekEnding').addEventListener('change', renderDashboard
 document.getElementById('entryDateTime').value = nowLocalDateTimeValue();
 
 const todayStr = nowLocalDateTimeValue().slice(0, 10);
-['logReportDate', 'tasksReportDate', 'teamReportDate', 'requestsReportDate'].forEach(id => {
+['logReportDate', 'tasksReportDate', 'teamReportDate', 'requestsReportDate', 'exportDayDate'].forEach(id => {
   const el = document.getElementById(id);
   if(el) el.value = todayStr;
 });
