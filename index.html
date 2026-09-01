@@ -898,6 +898,7 @@
           <label>Drawing / PDF (optional)</label>
           <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
         </div>
+        <p id="requestPlanSyncNote" style="display:none; font-size:11px; color:var(--muted); margin:-6px 0 12px;">ℹ️ Since you're management, this becomes the official drawing for this level — everyone will see it, including in Working Locations and future reports.</p>
       </div>
       <div id="requestPdfMarkerWrap" style="display:none;">
         <div class="field" style="border-bottom:none;">
@@ -2000,6 +2001,7 @@ function resetRequestPlanUpload(){
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
   document.getElementById('requestPlanFieldWrap').style.display = ev.target.value ? 'block' : 'none';
+  document.getElementById('requestPlanSyncNote').style.display = isManagement() ? 'block' : 'none';
   resetRequestPlanUpload();
 });
 
@@ -2020,6 +2022,12 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
     planImage.style.display = 'block';
     wrap.style.display = 'block';
     clearRequestAreaMarker();
+
+    const level = document.getElementById('requestLevel').value;
+    if(isManagement() && level){
+      customLevelPlans[level] = dataUrl;
+      await saveLevelsConfig();
+    }
   }catch(err){
     alert('Could not process that file: ' + err.message);
   }
