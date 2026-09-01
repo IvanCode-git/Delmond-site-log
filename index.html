@@ -893,9 +893,11 @@
         <label>Area (optional)</label>
         <input type="text" id="requestArea" placeholder="e.g. near Zone A, by the core">
       </div>
-      <div class="field">
-        <label>Drawing / PDF (optional)</label>
-        <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
+      <div id="requestPlanFieldWrap" style="display:none;">
+        <div class="field">
+          <label>Drawing / PDF (optional)</label>
+          <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
+        </div>
       </div>
       <div id="requestPdfMarkerWrap" style="display:none;">
         <div class="field" style="border-bottom:none;">
@@ -1987,6 +1989,19 @@ function setRequestAreaMarker(xPct, yPct){
   marker.style.display = 'block';
   document.getElementById('requestPlanReadout').textContent = `Pin at ${currentRequestMarker.x}%, ${currentRequestMarker.y}%`;
 }
+
+function resetRequestPlanUpload(){
+  currentRequestPlanImage = null;
+  clearRequestAreaMarker();
+  document.getElementById('requestPdfMarkerWrap').style.display = 'none';
+  document.getElementById('requestPlanImage').src = '';
+  document.getElementById('requestPlanFileInput').value = '';
+}
+
+document.getElementById('requestLevel').addEventListener('change', (ev) => {
+  document.getElementById('requestPlanFieldWrap').style.display = ev.target.value ? 'block' : 'none';
+  resetRequestPlanUpload();
+});
 
 document.getElementById('requestPlanFileInput').addEventListener('change', async (ev) => {
   const file = ev.target.files[0];
@@ -3903,12 +3918,11 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     });
     document.getElementById('requestNotes').value = '';
     document.getElementById('requestArea').value = '';
+    document.getElementById('requestLevel').value = '';
+    document.getElementById('requestPlanFieldWrap').style.display = 'none';
     currentRequestPhotos = [];
     renderRequestPhotoPreview();
-    currentRequestPlanImage = null;
-    clearRequestAreaMarker();
-    document.getElementById('requestPdfMarkerWrap').style.display = 'none';
-    document.getElementById('requestPlanImage').src = '';
+    resetRequestPlanUpload();
     sendPushNotification(['pm', 'supervisor', 'engineer'], `New entry request from ${currentSession.name}`, notes.slice(0, 120) || 'Open the app to see details');
   }catch(err){
     alert('Failed to send request: ' + err.message);
