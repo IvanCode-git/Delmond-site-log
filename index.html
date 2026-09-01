@@ -905,7 +905,7 @@
         </div>
         <label id="requestPlanSyncNote" style="display:none; align-items:flex-start; gap:8px; font-size:12px; color:var(--muted); margin:-6px 0 12px; cursor:pointer; text-transform:none; font-weight:400; letter-spacing:normal;">
           <input type="checkbox" id="requestPlanSaveForEveryone" checked style="margin-top:2px;">
-          <span>Save the first drawing as the official drawing for this level — everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
+          <span>Save each drawing you add so everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
         </label>
         <div id="requestPlanUploadStatus" style="display:none; font-size:12px; font-weight:700; margin:-6px 0 12px;"></div>
       </div>
@@ -1707,7 +1707,9 @@ let levelsList = LEVELS.slice();
 let customLevelPlans = {};
 
 function getPlanForLevel(level){
-  return (customLevelPlans && customLevelPlans[level]) || LEVEL_PLANS[level] || null;
+  const images = customLevelPlans && customLevelPlans[level];
+  if(images && images.length) return images[0];
+  return LEVEL_PLANS[level] || null;
 }
 
 function populateLevelSelect(sel){
@@ -1776,12 +1778,28 @@ async function saveLevelsConfig(){
   }
 }
 
-async function saveLevelPlan(levelName, dataUrl){
-  await siteCollection('levelPlans').doc(levelName).set({ image: dataUrl });
-}
-
 async function deleteLevelPlanDoc(levelName){
   try{ await siteCollection('levelPlans').doc(levelName).delete(); }catch(e){ /* ignore */ }
+}
+
+async function addLevelPlanImage(levelName, dataUrl){
+  const existing = (customLevelPlans[levelName] || []).slice();
+  existing.push(dataUrl);
+  await siteCollection('levelPlans').doc(levelName).set({ images: existing });
+  customLevelPlans[levelName] = existing;
+  return existing.length - 1;
+}
+
+async function removeLevelPlanImageAt(levelName, index){
+  const existing = (customLevelPlans[levelName] || []).slice();
+  existing.splice(index, 1);
+  if(existing.length){
+    await siteCollection('levelPlans').doc(levelName).set({ images: existing });
+    customLevelPlans[levelName] = existing;
+  } else {
+    await deleteLevelPlanDoc(levelName);
+    delete customLevelPlans[levelName];
+  }
 }
 
 async function removeLevel(levelName){
@@ -1921,8 +1939,7 @@ async function handleLevelPlanUpload(levelName, file, row){
   thumb.innerHTML = '…';
   try{
     const dataUrl = await processLevelPlanFile(file);
-    customLevelPlans[levelName] = dataUrl;
-    await saveLevelPlan(levelName, dataUrl);
+    await addLevelPlanImage(levelName, dataUrl);
     renderLevelsManager();
     renderEntries();
     if(document.getElementById('entryLevel').value === levelName){
@@ -2039,20 +2056,23 @@ function resetRequestPlanUpload(){
 
 async function removeRequestPlanAt(i){
   const level = document.getElementById('requestLevel').value;
-  const isSitePlan = i === 0 && !!(level && customLevelPlans[level]);
-  if(isSitePlan && isManagement()){
-    if(!confirm(`Remove the saved drawing for ${level}? This removes it for everyone.`)) return;
-    delete customLevelPlans[level];
-    await deleteLevelPlanDoc(level);
+  const item = currentRequestPlans[i];
+  const isSynced = !!(item && item.synced);
+  if(isSynced && isManagement()){
+    if(!confirm(`Remove this drawing for ${level}? This removes it for everyone.`)) return;
+    await removeLevelPlanImageAt(level, item.syncIndex);
     renderLevelsManager();
     renderEntries();
+    currentRequestPlans.forEach(p => {
+      if(p.synced && p.syncIndex > item.syncIndex) p.syncIndex -= 1;
+    });
   }
   currentRequestPlans.splice(i, 1);
   renderRequestPlansList();
   const statusEl = document.getElementById('requestPlanUploadStatus');
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--muted)';
-  statusEl.textContent = (isSitePlan && isManagement())
+  statusEl.textContent = (isSynced && isManagement())
     ? '🗑️ Drawing removed for everyone.'
     : '🗑️ Drawing removed from this report.';
 }
@@ -2065,14 +2085,14 @@ document.getElementById('requestLevel').addEventListener('change', (ev) => {
   document.getElementById('requestPlanSaveForEveryone').checked = true;
   resetRequestPlanUpload();
 
-  const existingPlan = level ? getPlanForLevel(level) : null;
-  if(existingPlan){
-    currentRequestPlans = [{ image: existingPlan, marker: null }];
+  const existingImages = level ? (customLevelPlans[level] || []) : [];
+  if(existingImages.length){
+    currentRequestPlans = existingImages.map((img, i) => ({ image: img, marker: null, synced: true, syncIndex: i }));
     renderRequestPlansList();
     const statusEl = document.getElementById('requestPlanUploadStatus');
     statusEl.style.display = 'block';
     statusEl.style.color = 'var(--muted)';
-    statusEl.textContent = `📋 Showing the saved drawing for ${level}. Tap it to mark your spot, add more drawings, or remove it.`;
+    statusEl.textContent = `📋 Showing the saved drawing${existingImages.length > 1 ? 's' : ''} for ${level}. Tap to mark a spot, add more, or remove any.`;
   }
 });
 
@@ -2083,21 +2103,23 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
   const statusEl = document.getElementById('requestPlanUploadStatus');
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--muted)';
-  statusEl.textContent = files.length > 1 ? 'Processing…' : 'Processing…';
+  statusEl.textContent = 'Processing…';
   try{
     for(const file of files){
-      const wasFirstEver = currentRequestPlans.length === 0;
       const dataUrl = await processLevelPlanFile(file);
-      currentRequestPlans.push({ image: dataUrl, marker: null });
+      const item = { image: dataUrl, marker: null, synced: false, syncIndex: -1 };
+      currentRequestPlans.push(item);
       renderRequestPlansList();
 
       const level = document.getElementById('requestLevel').value;
       const saveForEveryone = document.getElementById('requestPlanSaveForEveryone');
-      if(wasFirstEver && isManagement() && level && saveForEveryone && saveForEveryone.checked){
-        customLevelPlans[level] = dataUrl;
-        await saveLevelPlan(level, dataUrl);
+      if(isManagement() && level && saveForEveryone && saveForEveryone.checked){
+        const idx = await addLevelPlanImage(level, dataUrl);
+        item.synced = true;
+        item.syncIndex = idx;
+        renderRequestPlansList();
         statusEl.style.color = 'var(--ok, #16794d)';
-        statusEl.textContent = `✅ Saved as the drawing for ${level} — everyone can see it now.`;
+        statusEl.textContent = `✅ Saved as a drawing for ${level} — everyone can see it now.`;
       } else {
         statusEl.style.color = 'var(--ok, #16794d)';
         statusEl.textContent = '✅ Added — attached to this report only.';
@@ -2355,7 +2377,8 @@ function switchToSite(siteId, retriesLeft){
   siteListenerUnsubs.levelPlans = siteCollection('levelPlans').onSnapshot((snapshot) => {
     customLevelPlans = {};
     snapshot.docs.forEach((doc) => {
-      customLevelPlans[doc.id] = doc.data().image;
+      const data = doc.data();
+      customLevelPlans[doc.id] = Array.isArray(data.images) ? data.images : (data.image ? [data.image] : []);
     });
     renderLevelsManager();
     renderEntries();
@@ -4008,7 +4031,7 @@ document.getElementById('submitRequestBtn').onclick = async () => {
       type, level, area, notes, photos,
       planImage: currentRequestPlans[0] ? currentRequestPlans[0].image : null,
       marker: currentRequestPlans[0] ? currentRequestPlans[0].marker : null,
-      planImages: currentRequestPlans.length ? currentRequestPlans : [],
+      planImages: currentRequestPlans.map(p => ({ image: p.image, marker: p.marker })),
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
       submittedByUsername: currentSession.username,
