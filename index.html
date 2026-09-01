@@ -913,6 +913,7 @@
           </div>
           <div class="plan-readout">
             <span id="requestPlanReadout">Tap the drawing above to drop a pin.</span>
+            <button type="button" id="removeRequestPlanBtn" class="danger small">Remove Drawing</button>
             <button type="button" id="clearRequestMarkerBtn" class="secondary small">Clear Pin</button>
           </div>
         </div>
@@ -1727,12 +1728,14 @@ function renderLevelsManager(){
     const planSrc = getPlanForLevel(lvl);
     const thumbStyle = planSrc ? `background-image:url('${planSrc}');` : '';
     const thumbText = planSrc ? '' : 'No drawing';
+    const removeDrawingBtn = planSrc ? `<button type="button" class="secondary small remove-drawing-btn">Remove Drawing</button>` : '';
     return `
       <div class="level-row" data-level="${escapeHtml(lvl)}">
         <div class="level-thumb" style="${thumbStyle}">${thumbText}</div>
         <div class="level-row-name">${escapeHtml(lvl)}</div>
         <div class="level-row-actions">
           <label class="level-upload-label">Upload<input type="file" accept="image/*,.pdf" class="level-upload-input"></label>
+          ${removeDrawingBtn}
           <button type="button" class="danger small remove-level-btn">×</button>
         </div>
       </div>
@@ -1748,10 +1751,21 @@ document.getElementById('levelsManagerList').addEventListener('change', (ev) => 
   if(file) handleLevelPlanUpload(levelName, file, row);
 });
 
-document.getElementById('levelsManagerList').addEventListener('click', (ev) => {
-  if(!ev.target.classList.contains('remove-level-btn')) return;
-  const row = ev.target.closest('.level-row');
-  removeLevel(row.dataset.level);
+document.getElementById('levelsManagerList').addEventListener('click', async (ev) => {
+  if(ev.target.classList.contains('remove-level-btn')){
+    const row = ev.target.closest('.level-row');
+    removeLevel(row.dataset.level);
+    return;
+  }
+  if(ev.target.classList.contains('remove-drawing-btn')){
+    const row = ev.target.closest('.level-row');
+    const levelName = row.dataset.level;
+    if(!confirm(`Remove the saved drawing for "${levelName}"? This removes it for everyone.`)) return;
+    delete customLevelPlans[levelName];
+    await deleteLevelPlanDoc(levelName);
+    renderLevelsManager();
+    renderEntries();
+  }
 });
 
 renderLevelsManager();
@@ -2012,6 +2026,25 @@ function resetRequestPlanUpload(){
   document.getElementById('requestPlanFileInput').value = '';
   document.getElementById('requestPlanUploadStatus').style.display = 'none';
 }
+
+document.getElementById('removeRequestPlanBtn').onclick = async () => {
+  const level = document.getElementById('requestLevel').value;
+  const isSitePlan = !!(level && customLevelPlans[level]);
+  if(isSitePlan && isManagement()){
+    if(!confirm(`Remove the saved drawing for ${level}? This removes it for everyone.`)) return;
+    delete customLevelPlans[level];
+    await deleteLevelPlanDoc(level);
+    renderLevelsManager();
+    renderEntries();
+  }
+  resetRequestPlanUpload();
+  const statusEl = document.getElementById('requestPlanUploadStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = (isSitePlan && isManagement())
+    ? '🗑️ Drawing removed for everyone.'
+    : '🗑️ Drawing removed from this report.';
+};
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
   const level = ev.target.value;
