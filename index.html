@@ -898,7 +898,10 @@
           <label>Drawing / PDF (optional)</label>
           <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
         </div>
-        <p id="requestPlanSyncNote" style="display:none; font-size:11px; color:var(--muted); margin:-6px 0 12px;">ℹ️ Since you're management, this becomes the official drawing for this level — everyone will see it, including in Working Locations and future reports.</p>
+        <label id="requestPlanSyncNote" style="display:none; align-items:flex-start; gap:8px; font-size:12px; color:var(--muted); margin:-6px 0 12px; cursor:pointer; text-transform:none; font-weight:400; letter-spacing:normal;">
+          <input type="checkbox" id="requestPlanSaveForEveryone" checked style="margin-top:2px;">
+          <span>Save this as the official drawing for this level — everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
+        </label>
       </div>
       <div id="requestPdfMarkerWrap" style="display:none;">
         <div class="field" style="border-bottom:none;">
@@ -2001,7 +2004,8 @@ function resetRequestPlanUpload(){
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
   document.getElementById('requestPlanFieldWrap').style.display = ev.target.value ? 'block' : 'none';
-  document.getElementById('requestPlanSyncNote').style.display = isManagement() ? 'block' : 'none';
+  document.getElementById('requestPlanSyncNote').style.display = isManagement() ? 'flex' : 'none';
+  document.getElementById('requestPlanSaveForEveryone').checked = true;
   resetRequestPlanUpload();
 });
 
@@ -2024,7 +2028,8 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
     clearRequestAreaMarker();
 
     const level = document.getElementById('requestLevel').value;
-    if(isManagement() && level){
+    const saveForEveryone = document.getElementById('requestPlanSaveForEveryone');
+    if(isManagement() && level && saveForEveryone && saveForEveryone.checked){
       customLevelPlans[level] = dataUrl;
       await saveLevelsConfig();
     }
