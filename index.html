@@ -707,6 +707,10 @@
         <button data-filter="delay">Delays</button>
         <button data-filter="damage">Damages</button>
       </div>
+      <div class="status-toggle" id="entriesViewToggle">
+        <button data-view="chronological" class="active">🕐 Chronological</button>
+        <button data-view="grouped">🗂️ Grouped by Type</button>
+      </div>
       <div class="bulk-pdf-bar">
         <span id="bulkSelectedCount">Tick entries below to combine into one PDF</span>
         <button type="button" id="downloadSelectedPdfBtn" class="secondary small" disabled>📄 Download Selected as PDF</button>
@@ -867,6 +871,20 @@
         <label>What type of update is this?</label>
         <select id="requestType"></select>
       </div>
+
+      <div class="collapsible-header" id="requestTypesHeader" style="margin-top:4px;">
+        <span style="font-size:12px; color:var(--muted); font-weight:600;">Manage update type options</span>
+        <span class="chevron">▸</span>
+      </div>
+      <div class="collapsible-body" id="requestTypesBody">
+        <div style="height:8px;"></div>
+        <div id="requestTypesList" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="newRequestTypeInput" class="comment-input" placeholder="New type name, e.g. Inspection">
+          <button type="button" class="secondary small" id="addRequestTypeBtn">Add</button>
+        </div>
+      </div>
+
       <div class="field">
         <label>Level</label>
         <select id="requestLevel"></select>
@@ -874,6 +892,23 @@
       <div class="field">
         <label>Area (optional)</label>
         <input type="text" id="requestArea" placeholder="e.g. near Zone A, by the core">
+      </div>
+      <div class="field">
+        <label>Drawing / PDF (optional)</label>
+        <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
+      </div>
+      <div id="requestPdfMarkerWrap" style="display:none;">
+        <div class="field" style="border-bottom:none;">
+          <label>Mark the exact spot (tap the drawing)</label>
+          <div class="plan-box" id="requestPlanBox">
+            <img class="plan-image" id="requestPlanImage" alt="">
+            <div class="plan-marker" id="requestPlanMarker"></div>
+          </div>
+          <div class="plan-readout">
+            <span id="requestPlanReadout">Tap the drawing above to drop a pin.</span>
+            <button type="button" id="clearRequestMarkerBtn" class="secondary small">Clear Pin</button>
+          </div>
+        </div>
       </div>
       <div class="field">
         <label>What's happened?</label>
@@ -1082,7 +1117,7 @@
 <nav class="bottom-nav">
   <button data-tab="log" data-roles="pm,supervisor,engineer" class="active"><span class="nav-icon">📋</span>Log</button>
   <button data-tab="tasks" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">✅</span>Tasks</button>
-  <button data-tab="requestEntry" data-roles="labourer,fixers,jointers"><span class="nav-icon">✍️</span>Report</button>
+  <button data-tab="requestEntry" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">✍️</span>Report</button>
   <button data-tab="team" data-roles="pm,supervisor,engineer"><span class="nav-icon">👷</span>Team</button>
   <button data-tab="workingLocations" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">📍</span>Locations</button>
   <button data-tab="messages" data-roles="pm,supervisor,engineer,labourer,fixers,jointers"><span class="nav-icon">💬</span>Chat<span class="nav-badge" id="messagesNavBadge" style="display:none;"></span></button>
@@ -1872,6 +1907,7 @@ async function handleLevelPlanUpload(levelName, file, row){
 }
 
 let currentAreaMarker = null;
+let currentEntryPlanImageOverride = null;
 
 function updatePlanLabel(level){
   document.getElementById('planLabel').textContent = level
@@ -1920,6 +1956,7 @@ document.getElementById('entryLevel').addEventListener('change', (ev) => {
   const level = ev.target.value;
   document.getElementById('taskTypeWrap').style.display = level ? 'block' : 'none';
   document.getElementById('areaMarkerWrap').style.display = level ? 'block' : 'none';
+  currentEntryPlanImageOverride = null;
   loadLevelPlan(level);
   clearAreaMarker();
 });
@@ -1932,6 +1969,55 @@ document.getElementById('planBox').addEventListener('click', (ev) => {
 });
 
 document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
+
+let currentRequestMarker = null;
+let currentRequestPlanImage = null;
+
+function clearRequestAreaMarker(){
+  currentRequestMarker = null;
+  document.getElementById('requestPlanMarker').style.display = 'none';
+  document.getElementById('requestPlanReadout').textContent = 'Tap the drawing above to drop a pin.';
+}
+
+function setRequestAreaMarker(xPct, yPct){
+  currentRequestMarker = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
+  const marker = document.getElementById('requestPlanMarker');
+  marker.style.left = currentRequestMarker.x + '%';
+  marker.style.top = currentRequestMarker.y + '%';
+  marker.style.display = 'block';
+  document.getElementById('requestPlanReadout').textContent = `Pin at ${currentRequestMarker.x}%, ${currentRequestMarker.y}%`;
+}
+
+document.getElementById('requestPlanFileInput').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  const wrap = document.getElementById('requestPdfMarkerWrap');
+  const planImage = document.getElementById('requestPlanImage');
+  const planBox = document.getElementById('requestPlanBox');
+  try{
+    const dataUrl = await processLevelPlanFile(file);
+    currentRequestPlanImage = dataUrl;
+    planImage.onload = () => {
+      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
+    };
+    planImage.src = dataUrl;
+    planImage.style.display = 'block';
+    wrap.style.display = 'block';
+    clearRequestAreaMarker();
+  }catch(err){
+    alert('Could not process that file: ' + err.message);
+  }
+});
+
+document.getElementById('requestPlanBox').addEventListener('click', (ev) => {
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
+  const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
+  setRequestAreaMarker(xPct, yPct);
+});
+
+document.getElementById('clearRequestMarkerBtn').onclick = clearRequestAreaMarker;
 
 let currentLocationMarker = null;
 
@@ -2526,13 +2612,16 @@ function populateRequestTypeSelect(){
 }
 
 function renderEntryTypesManager(){
-  const list = document.getElementById('entryTypesList');
-  list.innerHTML = entryTypesList.map(t => `
+  const chipsHtml = entryTypesList.map(t => `
     <span class="type-chip" style="background:${t.color};">
       ${escapeHtml(t.label)}
       <button type="button" class="remove-type" onclick="removeEntryType('${t.value}')" title="Remove">×</button>
     </span>
   `).join('');
+  ['entryTypesList', 'requestTypesList'].forEach(id => {
+    const list = document.getElementById(id);
+    if(list) list.innerHTML = chipsHtml;
+  });
 }
 
 async function saveEntryTypesConfig(){
@@ -2560,19 +2649,26 @@ document.getElementById('entryTypesHeader').onclick = () => {
   const isOpen = document.getElementById('entryTypesBody').classList.contains('open');
   setCollapsible('entryTypesHeader', 'entryTypesBody', !isOpen);
 };
+document.getElementById('requestTypesHeader').onclick = () => {
+  const isOpen = document.getElementById('requestTypesBody').classList.contains('open');
+  setCollapsible('requestTypesHeader', 'requestTypesBody', !isOpen);
+};
 
-document.getElementById('addEntryTypeBtn').onclick = async () => {
-  const input = document.getElementById('newEntryTypeInput');
-  const label = input.value.trim();
+async function addNewEntryType(inputEl){
+  const label = inputEl.value.trim();
   if(!label) return;
   const value = slugifyTypeValue(label);
   const color = TYPE_PALETTE[entryTypesList.length % TYPE_PALETTE.length];
   entryTypesList.push({ value, label, color });
-  input.value = '';
+  inputEl.value = '';
   await saveEntryTypesConfig();
   populateEntryTypeSelect();
+  populateRequestTypeSelect();
   renderEntryTypesManager();
-};
+}
+
+document.getElementById('addEntryTypeBtn').onclick = () => addNewEntryType(document.getElementById('newEntryTypeInput'));
+document.getElementById('addRequestTypeBtn').onclick = () => addNewEntryType(document.getElementById('newRequestTypeInput'));
 
 populateEntryTypeSelect();
 populateRequestTypeSelect();
@@ -2584,18 +2680,7 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-function renderEntries(){
-  const list = document.getElementById('entriesList');
-  const statusFiltered = entries.filter(e => activeStatusFilter === 'completed' ? e.completed === true : e.completed !== true);
-  const filtered = activeFilter === 'all' ? statusFiltered : statusFiltered.filter(e => e.type === activeFilter);
-  const sorted = [...filtered].sort((a,b) => new Date(b.dateTime) - new Date(a.dateTime));
-
-  if(sorted.length === 0){
-    list.innerHTML = `<div class="empty">${activeStatusFilter === 'completed' ? 'No completed entries yet.' : 'No entries yet.'}</div>`;
-    return;
-  }
-
-  list.innerHTML = sorted.map(e => {
+function buildEntryCardHtml(e){
     const dt = new Date(e.dateTime);
     const dtDateStr = isNaN(dt) ? e.dateTime : dt.toLocaleDateString();
     const dtFullStr = isNaN(dt) ? e.dateTime : dt.toLocaleString();
@@ -2625,7 +2710,7 @@ function renderEntries(){
     if(e.taskType) locationBits.push('Task: ' + escapeHtml(e.taskType));
     const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
 
-    const miniPlanSrc = getPlanForLevel(e.level);
+    const miniPlanSrc = e.planImage || getPlanForLevel(e.level);
     const miniStyle = miniPlanSrc
       ? `background-image:url('${miniPlanSrc}'); background-size:cover; background-position:center;`
       : '';
@@ -2719,9 +2804,56 @@ function renderEntries(){
         </div>
       </div>
     `;
-  }).join('');
+}
+
+let entriesViewMode = 'chronological';
+
+function renderEntries(){
+  const list = document.getElementById('entriesList');
+  const statusFiltered = entries.filter(e => activeStatusFilter === 'completed' ? e.completed === true : e.completed !== true);
+  const filtered = activeFilter === 'all' ? statusFiltered : statusFiltered.filter(e => e.type === activeFilter);
+  const sorted = [...filtered].sort((a,b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+  if(sorted.length === 0){
+    list.innerHTML = `<div class="empty">${activeStatusFilter === 'completed' ? 'No completed entries yet.' : 'No entries yet.'}</div>`;
+    updateBulkPdfBar();
+    return;
+  }
+
+  list.innerHTML = entriesViewMode === 'grouped'
+    ? renderEntriesGrouped(sorted)
+    : sorted.map(buildEntryCardHtml).join('');
 
   updateBulkPdfBar();
+}
+
+function renderEntriesGrouped(sorted){
+  const groups = {};
+  const order = [];
+  sorted.forEach(e => {
+    const typeKey = e.type || 'other';
+    if(!groups[typeKey]){ groups[typeKey] = {}; order.push(typeKey); }
+    const levelKey = e.level || 'No level set';
+    if(!groups[typeKey][levelKey]) groups[typeKey][levelKey] = [];
+    groups[typeKey][levelKey].push(e);
+  });
+  return order.map(typeKey => {
+    const levelGroups = groups[typeKey];
+    const totalCount = Object.values(levelGroups).reduce((sum, arr) => sum + arr.length, 0);
+    const levelSections = Object.keys(levelGroups).sort().map(levelKey => `
+      <div class="section-label" style="margin-top:14px;">${escapeHtml(levelKey)} (${levelGroups[levelKey].length})</div>
+      ${levelGroups[levelKey].map(buildEntryCardHtml).join('')}
+    `).join('');
+    return `
+      <div style="margin-bottom:18px;">
+        <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:2px solid var(--border);">
+          <span class="type-tag type-${typeKey}">${typeLabel(typeKey)}</span>
+          <strong style="font-size:13px;">${totalCount} report${totalCount === 1 ? '' : 's'}</strong>
+        </div>
+        ${levelSections}
+      </div>
+    `;
+  }).join('');
 }
 
 function toggleEntrySelection(id, checked){
@@ -2930,7 +3062,7 @@ async function drawEntryIntoDoc(doc, id){
 
     const localMedia = getLocalMedia(e.id);
     const pdfPhotos = (e.photos && e.photos.length) ? e.photos : (e.hasPhotos ? getLegacyLocalPhotos(e.id) : []);
-    const planImgUrl = getPlanForLevel(e.level);
+    const planImgUrl = e.planImage || getPlanForLevel(e.level);
 
     if(e.areaMarker && planImgUrl){
       try{
@@ -3219,6 +3351,7 @@ function resetEntryForm(){
   document.getElementById('entryTaskType').value = '';
   document.getElementById('taskTypeWrap').style.display = 'none';
   document.getElementById('areaMarkerWrap').style.display = 'none';
+  currentEntryPlanImageOverride = null;
   clearAreaMarker();
   loadLevelPlan('');
   document.getElementById('entryProgress').value = '';
@@ -3265,6 +3398,16 @@ function startEditEntry(id){
   document.getElementById('areaMarkerWrap').style.display = levelHasValue ? 'block' : 'none';
   loadLevelPlan(e.level || '');
   document.getElementById('entryTaskType').value = e.taskType || '';
+
+  currentEntryPlanImageOverride = e.planImage || null;
+  if(e.planImage){
+    const planImage = document.getElementById('planImage');
+    const planBox = document.getElementById('planBox');
+    document.getElementById('planLabel').style.display = 'none';
+    planImage.onload = () => { planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight; };
+    planImage.src = e.planImage;
+    planImage.style.display = 'block';
+  }
 
   if(e.areaMarker){
     setAreaMarker(e.areaMarker.x, e.areaMarker.y);
@@ -3363,6 +3506,7 @@ document.getElementById('addEntryBtn').onclick = async () => {
       level,
       area,
       areaMarker: currentAreaMarker,
+      planImage: currentEntryPlanImageOverride || null,
       taskType,
       progress,
       taskStart,
@@ -3383,6 +3527,16 @@ document.getElementById('addEntryBtn').onclick = async () => {
       entryData.comments = [];
       entryData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await siteCollection('entries').doc(entryId).set(entryData);
+      const updateSubject = `New update: ${typeLabel(type)}${level ? ' — ' + level : ''}`;
+      const updateLines = [
+        `<strong>Type:</strong> ${escapeHtml(typeLabel(type))}`,
+        level ? `<strong>Level:</strong> ${escapeHtml(level)}` : '',
+        area ? `<strong>Area:</strong> ${escapeHtml(area)}` : '',
+        `<strong>Notes:</strong> ${escapeHtml(notes || '(none)')}`,
+        `<strong>Logged by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
+        `<strong>When:</strong> ${new Date().toLocaleString()}`
+      ];
+      notifySiteRecipients(updateSubject, updateLines);
     }
 
     resetEntryForm();
@@ -3418,6 +3572,15 @@ document.getElementById('statusFilters').addEventListener('click', (ev) => {
   if(!btn) return;
   activeStatusFilter = btn.dataset.status;
   document.querySelectorAll('#statusFilters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEntries();
+});
+
+document.getElementById('entriesViewToggle').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-view]');
+  if(!btn) return;
+  entriesViewMode = btn.dataset.view;
+  document.querySelectorAll('#entriesViewToggle button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderEntries();
 });
@@ -3719,7 +3882,7 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     alert('Add a description or a photo before sending the request.');
     return;
   }
-  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0);
+  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0) + (currentRequestPlanImage ? currentRequestPlanImage.length : 0);
   if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
     alert('These photos are too large to sync. Please remove one and try again.');
     return;
@@ -3731,6 +3894,8 @@ document.getElementById('submitRequestBtn').onclick = async () => {
   try{
     await siteCollection('entryRequests').add({
       type, level, area, notes, photos,
+      planImage: currentRequestPlanImage || null,
+      marker: currentRequestMarker || null,
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
       submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3740,6 +3905,10 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     document.getElementById('requestArea').value = '';
     currentRequestPhotos = [];
     renderRequestPhotoPreview();
+    currentRequestPlanImage = null;
+    clearRequestAreaMarker();
+    document.getElementById('requestPdfMarkerWrap').style.display = 'none';
+    document.getElementById('requestPlanImage').src = '';
     sendPushNotification(['pm', 'supervisor', 'engineer'], `New entry request from ${currentSession.name}`, notes.slice(0, 120) || 'Open the app to see details');
   }catch(err){
     alert('Failed to send request: ' + err.message);
@@ -3764,6 +3933,12 @@ function renderRequestCard(r, showActions){
   if(r.level) locationBits.push('Level: ' + escapeHtml(r.level));
   if(r.area) locationBits.push('Area: ' + escapeHtml(r.area));
   const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
+  const planHtml = r.planImage
+    ? `<div class="plan-box" style="margin-bottom:10px;">
+        <img class="plan-image" src="${r.planImage}" style="display:block;">
+        ${r.marker ? `<div class="plan-marker" style="left:${r.marker.x}%; top:${r.marker.y}%; display:block;"></div>` : ''}
+      </div>`
+    : '';
   const actionsHtml = (showActions && r.status === 'pending')
     ? `<div class="entry-actions">
         <button type="button" class="secondary small" onclick="useRequestForEntry('${r.id}')">✅ Create Log Entry</button>
@@ -3775,6 +3950,7 @@ function renderRequestCard(r, showActions){
       <div class="entry-detail open">
         <div class="entry-tags"><span class="type-tag type-${r.type}">${typeLabel(r.type)}</span> &nbsp;${dtStr} ${requestStatusBadge(r.status)}</div>
         ${locationHtml}
+        ${planHtml}
         <div class="entry-body">${r.notes ? escapeHtml(r.notes) : '<em>No description</em>'}</div>
         ${photosHtml}
         ${actionsHtml}
@@ -3819,6 +3995,16 @@ async function useRequestForEntry(id){
   document.getElementById('entryNotes').value = r.notes || '';
   currentPhotos = (r.photos || []).map(p => ({ file: null, preview: p }));
   renderPhotoPreview();
+  if(r.planImage){
+    currentEntryPlanImageOverride = r.planImage;
+    const planImage = document.getElementById('planImage');
+    const planBox = document.getElementById('planBox');
+    document.getElementById('planLabel').style.display = 'none';
+    planImage.onload = () => { planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight; };
+    planImage.src = r.planImage;
+    planImage.style.display = 'block';
+    if(r.marker) setAreaMarker(r.marker.x, r.marker.y);
+  }
   showTab('log');
   document.getElementById('entryNotes').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
