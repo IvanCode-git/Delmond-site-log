@@ -859,7 +859,7 @@
     <div class="card">
       <h2>Entry Requests from Labourers</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">
-        Requests submitted from the Labourer account. Accept one to pre-fill a new Log Entry, or dismiss it.
+        Requests submitted from the Labourer account. Accept one to add it straight to Log Entries, or reject it.
       </p>
       <div id="requestsList"></div>
     </div>
@@ -4141,32 +4141,59 @@ async function useRequestForEntry(id){
   const r = entryRequests.find(x => x.id === id);
   if(!r) return;
   try{
+    const entryId = siteCollection('entries').doc().id;
+    const type = r.type || 'progress';
+    const level = r.level || '';
+    const area = r.area || '';
+    const notes = r.notes || '';
+    const entryData = {
+      type,
+      dateTime: nowLocalDateTimeValue(),
+      notes,
+      level,
+      area,
+      areaMarker: r.marker || null,
+      planImage: r.planImage || null,
+      taskType: '',
+      progress: '',
+      taskStart: '',
+      taskFinish: '',
+      handoverToDelmond: '',
+      handoverBackContractor: '',
+      transcript: '',
+      photos: r.photos || [],
+      hasPhotos: (r.photos || []).length > 0,
+      hasAudio: false,
+      completed: false,
+      comments: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await siteCollection('entries').doc(entryId).set(entryData);
     await siteCollection('entryRequests').doc(id).update({ status: 'accepted' });
-    sendPushNotification(['labourer'], 'Your request was accepted', `${currentSession.name} is turning it into a log entry.`);
+
+    const updateSubject = `New update: ${typeLabel(type)}${level ? ' — ' + level : ''}`;
+    const updateLines = [
+      `<strong>Type:</strong> ${escapeHtml(typeLabel(type))}`,
+      level ? `<strong>Level:</strong> ${escapeHtml(level)}` : '',
+      area ? `<strong>Area:</strong> ${escapeHtml(area)}` : '',
+      `<strong>Notes:</strong> ${escapeHtml(notes || '(none)')}`,
+      `<strong>Logged by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
+      `<strong>When:</strong> ${new Date().toLocaleString()}`
+    ];
+    notifySiteRecipients(updateSubject, updateLines);
+    sendPushNotification(['labourer'], 'Your request was accepted', `${currentSession.name} added it to the log.`);
+
+    showTab('log');
+    setTimeout(() => {
+      const newDetail = document.getElementById('detail-' + entryId);
+      if(newDetail){
+        newDetail.classList.add('open');
+        newDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
   }catch(err){
-    alert('Failed to update request: ' + err.message);
-    return;
+    alert('Failed to create the log entry: ' + err.message);
   }
-  resetEntryForm();
-  document.getElementById('entryType').value = r.type || 'progress';
-  document.getElementById('entryLevel').value = r.level || '';
-  document.getElementById('entryLevel').dispatchEvent(new Event('change'));
-  document.getElementById('entryArea').value = r.area || '';
-  document.getElementById('entryNotes').value = r.notes || '';
-  currentPhotos = (r.photos || []).map(p => ({ file: null, preview: p }));
-  renderPhotoPreview();
-  if(r.planImage){
-    currentEntryPlanImageOverride = r.planImage;
-    const planImage = document.getElementById('planImage');
-    const planBox = document.getElementById('planBox');
-    document.getElementById('planLabel').style.display = 'none';
-    planImage.onload = () => { planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight; };
-    planImage.src = r.planImage;
-    planImage.style.display = 'block';
-    if(r.marker) setAreaMarker(r.marker.x, r.marker.y);
-  }
-  showTab('log');
-  document.getElementById('entryNotes').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 window.useRequestForEntry = useRequestForEntry;
 
