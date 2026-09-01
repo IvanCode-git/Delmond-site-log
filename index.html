@@ -998,7 +998,7 @@
     </div>
 
     <div class="card">
-      <h2>On Site Now</h2>
+      <h2 id="onSiteNowHeading">On Site Now</h2>
       <div id="workingLocationsSummary" class="stat-grid" style="margin-bottom:14px;"></div>
       <div id="workingLocationsList"></div>
     </div>
@@ -4502,11 +4502,19 @@ function renderWorkingLocations(){
     `;
   }
 
+  const heading = document.getElementById('onSiteNowHeading');
+  const visibleLocations = isManagement()
+    ? activeLocations
+    : activeLocations.filter(l => currentSession && l.workerUsername === currentSession.username);
+  if(heading) heading.textContent = isManagement() ? 'On Site Now' : 'Your Check-in';
+
   const list = document.getElementById('workingLocationsList');
   if(!list) return;
-  const sorted = [...activeLocations].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
+  const sorted = [...visibleLocations].sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt));
   if(sorted.length === 0){
-    list.innerHTML = '<div class="empty">No one is currently checked in.</div>';
+    list.innerHTML = isManagement()
+      ? '<div class="empty">No one is currently checked in.</div>'
+      : '<div class="empty">You\'re not checked in anywhere right now.</div>';
     return;
   }
 
