@@ -2014,10 +2014,29 @@ function resetRequestPlanUpload(){
 }
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
-  document.getElementById('requestPlanFieldWrap').style.display = ev.target.value ? 'block' : 'none';
+  const level = ev.target.value;
+  document.getElementById('requestPlanFieldWrap').style.display = level ? 'block' : 'none';
   document.getElementById('requestPlanSyncNote').style.display = isManagement() ? 'flex' : 'none';
   document.getElementById('requestPlanSaveForEveryone').checked = true;
   resetRequestPlanUpload();
+
+  const existingPlan = level ? getPlanForLevel(level) : null;
+  if(existingPlan){
+    currentRequestPlanImage = existingPlan;
+    const wrap = document.getElementById('requestPdfMarkerWrap');
+    const planImage = document.getElementById('requestPlanImage');
+    const planBox = document.getElementById('requestPlanBox');
+    const statusEl = document.getElementById('requestPlanUploadStatus');
+    planImage.onload = () => {
+      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
+    };
+    planImage.src = existingPlan;
+    planImage.style.display = 'block';
+    wrap.style.display = 'block';
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = `📋 Showing the saved drawing for ${level}. Tap it to mark your spot, or upload a new file to replace it.`;
+  }
 });
 
 document.getElementById('requestPlanFileInput').addEventListener('change', async (ev) => {
