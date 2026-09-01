@@ -4112,6 +4112,17 @@ function renderRequestChat(r, listKey){
 }
 
 function renderRequests(){
+  const requestTypesHeader = document.getElementById('requestTypesHeader');
+  const requestTypesBody = document.getElementById('requestTypesBody');
+  if(requestTypesHeader && requestTypesBody){
+    if(isManagement()){
+      requestTypesHeader.style.display = '';
+    } else {
+      requestTypesHeader.style.display = 'none';
+      requestTypesBody.classList.remove('open');
+    }
+  }
+
   const sorted = [...entryRequests].sort((a, b) => tsOf(b.submittedAt) - tsOf(a.submittedAt));
 
   const list = document.getElementById('requestsList');
