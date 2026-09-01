@@ -1712,6 +1712,17 @@ function getPlanForLevel(level){
   return LEVEL_PLANS[level] || null;
 }
 
+// Resolves a request/entry plan item's actual image — synced items don't store their own
+// copy (to keep the parent document small), so look them up from the shared level plans.
+function resolvePlanImage(level, item){
+  if(!item) return null;
+  if(item.image) return item.image;
+  if(item.synced && level && customLevelPlans[level] && typeof item.syncIndex === 'number'){
+    return customLevelPlans[level][item.syncIndex] || null;
+  }
+  return null;
+}
+
 function populateLevelSelect(sel){
   const prevValue = sel.value;
   sel.innerHTML = '<option value="">Select level…</option>' +
@@ -4016,22 +4027,30 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     alert('Add a description or a photo before sending the request.');
     return;
   }
-  const planImagesBytes = currentRequestPlans.reduce((sum, p) => sum + (p.image ? p.image.length : 0), 0);
+  // Already-synced drawings live in levelPlans and don't need to be duplicated inline —
+  // only freshly-attached (not-yet-synced) drawings count against the document's size budget.
+  const planImagesBytes = currentRequestPlans.reduce((sum, p) => sum + (p.synced ? 0 : (p.image ? p.image.length : 0)), 0);
   const photosBytes = photos.reduce((sum, p) => sum + p.length, 0) + planImagesBytes;
   if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
     alert('These photos are too large to sync. Please remove one and try again.');
     return;
   }
 
+  const firstPlan = currentRequestPlans[0] || null;
   const btn = document.getElementById('submitRequestBtn');
   btn.disabled = true;
   btn.textContent = 'Sending...';
   try{
     await siteCollection('entryRequests').add({
       type, level, area, notes, photos,
-      planImage: currentRequestPlans[0] ? currentRequestPlans[0].image : null,
-      marker: currentRequestPlans[0] ? currentRequestPlans[0].marker : null,
-      planImages: currentRequestPlans.map(p => ({ image: p.image, marker: p.marker })),
+      planImage: firstPlan && !firstPlan.synced ? firstPlan.image : null,
+      marker: firstPlan ? firstPlan.marker : null,
+      planImages: currentRequestPlans.map(p => ({
+        image: p.synced ? null : p.image,
+        marker: p.marker,
+        synced: !!p.synced,
+        syncIndex: p.synced ? p.syncIndex : null
+      })),
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
       submittedByUsername: currentSession.username,
@@ -4072,12 +4091,15 @@ function renderRequestCard(r, showActions, listKey){
   const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
   const plans = (r.planImages && r.planImages.length) ? r.planImages : (r.planImage ? [{ image: r.planImage, marker: r.marker }] : []);
   const planHtml = plans.length
-    ? plans.map(p => `
-        <div class="plan-box" style="margin-bottom:10px;">
-          <img class="plan-image" src="${p.image}" style="display:block;">
-          ${p.marker ? `<div class="plan-marker" style="left:${p.marker.x}%; top:${p.marker.y}%; display:block;"></div>` : ''}
-        </div>
-      `).join('')
+    ? plans.map(p => {
+        const src = resolvePlanImage(r.level, p);
+        return src ? `
+          <div class="plan-box" style="margin-bottom:10px;">
+            <img class="plan-image" src="${src}" style="display:block;">
+            ${p.marker ? `<div class="plan-marker" style="left:${p.marker.x}%; top:${p.marker.y}%; display:block;"></div>` : ''}
+          </div>
+        ` : '';
+      }).join('')
     : '';
   const actionsHtml = (showActions && r.status === 'pending')
     ? `<div class="entry-actions">
