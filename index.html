@@ -334,6 +334,11 @@
   .msg-row.mine{background:var(--accent); color:#fff; margin-left:auto; border-bottom-right-radius:4px;}
   .msg-row.theirs{background:#fff; border:1px solid var(--border); color:var(--text); margin-right:auto; border-bottom-left-radius:4px;}
   .msg-meta{font-size:10px; opacity:.75; margin-top:3px;}
+  .request-chat{margin-top:12px; border-top:1px solid var(--border); padding-top:10px;}
+  .request-chat-header{font-size:12px; font-weight:700; color:var(--muted); margin-bottom:8px;}
+  .request-chat-messages{max-height:220px; overflow-y:auto; display:flex; flex-direction:column; margin-bottom:8px;}
+  .request-chat-input-row{display:flex; gap:8px;}
+  .request-chat-input-row input{flex:1;}
   .info-banner{
     background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:var(--radius-sm);
     padding:10px 12px; font-size:13px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
@@ -931,7 +936,7 @@
     </div>
 
     <div class="card">
-      <h2>Your Requests</h2>
+      <h2 id="myRequestsHeading">Your Requests</h2>
       <div id="myRequestsList"></div>
     </div>
 
@@ -4008,6 +4013,7 @@ document.getElementById('submitRequestBtn').onclick = async () => {
       marker: currentRequestMarker || null,
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
+      submittedByUsername: currentSession.username,
       submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
       status: 'pending'
     });
@@ -4032,7 +4038,8 @@ function requestStatusBadge(status){
   return `<span class="status-badge ${status}">${label}</span>`;
 }
 
-function renderRequestCard(r, showActions){
+function renderRequestCard(r, showActions, listKey){
+  listKey = listKey || 'default';
   const dt = r.submittedAt && r.submittedAt.toDate ? r.submittedAt.toDate() : null;
   const dtStr = dt ? dt.toLocaleString() : 'Just now';
   const photosHtml = (r.photos && r.photos.length)
@@ -4050,19 +4057,49 @@ function renderRequestCard(r, showActions){
     : '';
   const actionsHtml = (showActions && r.status === 'pending')
     ? `<div class="entry-actions">
-        <button type="button" class="secondary small" onclick="useRequestForEntry('${r.id}')">✅ Create Log Entry</button>
-        <button type="button" class="danger small" onclick="dismissRequest('${r.id}')">Dismiss</button>
+        <button type="button" class="secondary small" onclick="useRequestForEntry('${r.id}')">✅ Accept</button>
+        <button type="button" class="danger small" onclick="dismissRequest('${r.id}')">❌ Reject</button>
       </div>`
     : '';
   return `
     <div class="entry-item">
       <div class="entry-detail open">
         <div class="entry-tags"><span class="type-tag type-${r.type}">${typeLabel(r.type)}</span> &nbsp;${dtStr} ${requestStatusBadge(r.status)}</div>
+        <div style="font-size:12px; color:var(--muted); margin:-4px 0 6px;">From: ${escapeHtml(r.submittedByName || 'Unknown')}</div>
         ${locationHtml}
         ${planHtml}
         <div class="entry-body">${r.notes ? escapeHtml(r.notes) : '<em>No description</em>'}</div>
         ${photosHtml}
         ${actionsHtml}
+        ${renderRequestChat(r, listKey)}
+      </div>
+    </div>
+  `;
+}
+
+function renderRequestChat(r, listKey){
+  const inputId = `reqComment-${listKey}-${r.id}`;
+  const comments = r.comments || [];
+  const commentsHtml = comments.length
+    ? comments.map(c => {
+        const mine = c.fromUsername === (currentSession && currentSession.username);
+        const time = c.createdAt ? new Date(c.createdAt).toLocaleString() : '';
+        return `
+          <div class="msg-row ${mine ? 'mine' : 'theirs'}">
+            <div>${escapeHtml(c.text)}</div>
+            <div class="msg-meta">${mine ? 'You' : escapeHtml(c.fromName || '')} · ${time}</div>
+          </div>
+        `;
+      }).join('')
+    : '<div class="empty" style="font-size:12px;">No messages yet.</div>';
+  const otherParty = isManagement() ? escapeHtml(r.submittedByName || 'the requester') : 'Val, Deniz &amp; Ivan';
+  return `
+    <div class="request-chat">
+      <div class="request-chat-header">💬 Chat with ${otherParty}</div>
+      <div class="request-chat-messages">${commentsHtml}</div>
+      <div class="request-chat-input-row">
+        <input type="text" class="comment-input" id="${inputId}" placeholder="Type a message…" onkeydown="if(event.key==='Enter'){event.preventDefault(); sendRequestComment('${r.id}', '${inputId}');}">
+        <button type="button" class="secondary small" onclick="sendRequestComment('${r.id}', '${inputId}')">Send</button>
       </div>
     </div>
   `;
@@ -4074,16 +4111,30 @@ function renderRequests(){
   const list = document.getElementById('requestsList');
   if(list){
     list.innerHTML = sorted.length
-      ? sorted.map(r => renderRequestCard(r, true)).join('')
+      ? sorted.map(r => renderRequestCard(r, true, 'review')).join('')
       : '<div class="empty">No requests yet.</div>';
   }
 
   const myList = document.getElementById('myRequestsList');
   if(myList){
-    myList.innerHTML = sorted.length
-      ? sorted.map(r => renderRequestCard(r, false)).join('')
-      : '<div class="empty">You haven\'t sent any requests yet.</div>';
+    const heading = document.getElementById('myRequestsHeading');
+    if(isManagement()){
+      if(heading) heading.textContent = 'Entry Requests from Labourers';
+      myList.innerHTML = sorted.length
+        ? sorted.map(r => renderRequestCard(r, true, 'mine')).join('')
+        : '<div class="empty">No requests yet.</div>';
+    } else {
+      if(heading) heading.textContent = 'Your Requests';
+      const mine = sorted.filter(r => r.submittedByUsername
+        ? r.submittedByUsername === currentSession.username
+        : r.submittedByName === currentSession.name);
+      myList.innerHTML = mine.length
+        ? mine.map(r => renderRequestCard(r, false, 'mine')).join('')
+        : '<div class="empty">You haven\'t sent any requests yet.</div>';
+    }
   }
+
+  document.querySelectorAll('.request-chat-messages').forEach(el => { el.scrollTop = el.scrollHeight; });
 }
 
 async function useRequestForEntry(id){
@@ -4128,6 +4179,40 @@ async function dismissRequest(id){
   }
 }
 window.dismissRequest = dismissRequest;
+
+async function sendRequestComment(id, inputId){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  const r = entryRequests.find(x => x.id === id);
+  if(!r) return;
+  const comment = {
+    text,
+    fromName: currentSession.name,
+    fromUsername: currentSession.username,
+    createdAt: new Date().toISOString()
+  };
+  input.disabled = true;
+  try{
+    await siteCollection('entryRequests').doc(id).update({
+      comments: firebase.firestore.FieldValue.arrayUnion(comment)
+    });
+    input.value = '';
+    const preview = text.slice(0, 120);
+    if(isManagement() && r.submittedByUsername){
+      sendPushNotificationToUser(r.submittedByUsername, `${currentSession.name} replied to your request`, preview);
+    } else if(!isManagement()){
+      sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} replied on a request`, preview);
+    }
+  }catch(err){
+    alert('Failed to send message: ' + err.message);
+  }finally{
+    input.disabled = false;
+    input.focus();
+  }
+}
+window.sendRequestComment = sendRequestComment;
 
 // ---- Direct messages (any signed-in person to any other) ----
 
