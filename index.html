@@ -1074,6 +1074,12 @@
       <div id="teamList"></div>
     </div>
 
+    <div class="card" id="finishedLocationsCard" style="display:none;">
+      <h2>Finished Locations</h2>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">Everything the team has marked "Finished Here", most recent first.</p>
+      <div id="finishedLocationsList"></div>
+    </div>
+
   </div>
 
     <div class="card" id="workerProfileCard" style="display:none;">
@@ -4521,10 +4527,12 @@ function renderWorkingLocations(){
       : '';
     const canFinish = currentSession && currentSession.username === loc.workerUsername;
     const canSendPdf = isManagement();
-    const actionsHtml = (canFinish || canSendPdf) ? `
+    const canDelete = isManagement();
+    const actionsHtml = (canFinish || canSendPdf || canDelete) ? `
       <div class="entry-actions">
         ${canFinish ? `<button type="button" class="secondary" onclick="finishLocation('${loc.id}')">✅ Finished Here</button>` : ''}
         ${canSendPdf ? `<label class="send-pdf-btn">📄 Send PDF<input type="file" accept="application/pdf,.pdf" style="display:none;" onchange="sendPdfToLocation('${loc.id}', this)"></label>` : ''}
+        ${canDelete ? `<button type="button" class="danger small" onclick="deleteWorkingLocation('${loc.id}')">🗑️ Delete</button>` : ''}
       </div>
     ` : '';
     const commentsHtml = (loc.comments && loc.comments.length)
@@ -4618,6 +4626,18 @@ async function finishLocation(id){
   }
 }
 window.finishLocation = finishLocation;
+
+async function deleteWorkingLocation(id){
+  const loc = workingLocations.find(l => l.id === id);
+  const label = loc ? `${loc.workerName || loc.tradeLabel}'s check-in at ${loc.level}` : 'this check-in';
+  if(!confirm(`Delete ${label}? This cannot be undone.`)) return;
+  try{
+    await siteCollection('workingLocations').doc(id).delete();
+  }catch(err){
+    alert('Failed to delete that check-in: ' + err.message);
+  }
+}
+window.deleteWorkingLocation = deleteWorkingLocation;
 
 function dayRange(dateStr){
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -5141,10 +5161,53 @@ function renderWorkerTaskHistory(username){
   `).join('');
 }
 
+function renderFinishedLocations(){
+  const container = document.getElementById('finishedLocationsList');
+  if(!container) return;
+  const finished = workingLocations
+    .filter(l => l.active === false)
+    .sort((a, b) => tsOf(b.finishedAt || b.createdAt) - tsOf(a.finishedAt || a.createdAt))
+    .slice(0, 50);
+  if(finished.length === 0){
+    container.innerHTML = '<div class="empty">No finished check-ins yet.</div>';
+    return;
+  }
+  container.innerHTML = finished.map(loc => {
+    const start = loc.createdAt && loc.createdAt.toDate ? loc.createdAt.toDate() : null;
+    const end = loc.finishedAt && loc.finishedAt.toDate ? loc.finishedAt.toDate() : null;
+    const duration = formatDuration(sessionDurationMs(loc));
+    const descriptionHtml = loc.description
+      ? `<div class="location-description">${escapeHtml(loc.description)}</div>`
+      : '';
+    return `
+      <div class="location-card">
+        <div class="location-card-header">
+          <div class="contact-avatar" style="background:${tradeColor(loc.trade)};">${escapeHtml((loc.workerName || loc.tradeLabel || '?').charAt(0))}</div>
+          <div style="flex:1; min-width:0;">
+            <div class="location-name">${escapeHtml(loc.workerName || loc.tradeLabel)}</div>
+            <div class="location-meta">${escapeHtml(loc.tradeLabel)} · Level: ${escapeHtml(loc.level)} · ${duration}</div>
+            <div class="location-meta">${start ? start.toLocaleString() : ''}${end ? ' → ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+          </div>
+        </div>
+        ${descriptionHtml}
+        <div class="entry-actions">
+          <button type="button" class="danger small" onclick="deleteWorkingLocation('${loc.id}')">🗑️ Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderTeam(){
   if(activeWorkerProfileUsername){
     renderWorkerProfile();
     return;
+  }
+
+  const finishedCard = document.getElementById('finishedLocationsCard');
+  if(finishedCard){
+    finishedCard.style.display = isManagement() ? 'block' : 'none';
+    if(isManagement()) renderFinishedLocations();
   }
 
   const summary = document.getElementById('teamSummary');
