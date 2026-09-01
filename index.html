@@ -279,15 +279,15 @@
     background:#000; pointer-events:none; display:none;
   }
   .plan-marker{
-    position:absolute; width:16px; height:16px; margin-left:-8px; margin-top:-8px; border-radius:50%;
-    background:var(--danger); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
+    position:absolute; width:10px; height:10px; margin-left:-5px; margin-top:-5px; border-radius:50%;
+    background:var(--ok); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
     pointer-events:none; display:none;
   }
   .plan-readout{font-size:12px; color:var(--muted); margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
   .plan-mini{width:70px; aspect-ratio:4/3; border:1px solid var(--border); border-radius:6px; position:relative; flex-shrink:0;
     background:repeating-linear-gradient(0deg,#f4f5f7,#f4f5f7 9px,#e6e8ec 9px,#e6e8ec 10px), repeating-linear-gradient(90deg,#f4f5f7,#f4f5f7 9px,#e6e8ec 9px,#e6e8ec 10px);
   }
-  .plan-mini .plan-marker{width:10px; height:10px; margin-left:-5px; margin-top:-5px;}
+  .plan-mini .plan-marker{width:7px; height:7px; margin-left:-3.5px; margin-top:-3.5px;}
 
   .entry-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
   .email-panel{margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
@@ -671,7 +671,7 @@
 
       <div class="field">
         <label>Photos</label>
-        <input type="file" id="photoInput" accept="image/*" multiple capture="environment">
+        <input type="file" id="photoInput" accept="image/*" multiple>
         <div class="photo-grid" id="photoPreview"></div>
       </div>
 
@@ -815,7 +815,7 @@
       </div>
       <div class="field">
         <label>Photos (optional)</label>
-        <input type="file" id="taskPhotoInput" accept="image/*" multiple capture="environment">
+        <input type="file" id="taskPhotoInput" accept="image/*" multiple>
         <div class="photo-grid" id="taskPhotoPreview"></div>
       </div>
       <button type="button" id="assignTaskBtn">Send Task</button>
@@ -901,35 +901,22 @@
       <div id="requestPlanFieldWrap" style="display:none;">
         <div class="field">
           <label>Drawing / PDF (optional)</label>
-          <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*">
+          <input type="file" id="requestPlanFileInput" accept="application/pdf,image/*" multiple>
         </div>
         <label id="requestPlanSyncNote" style="display:none; align-items:flex-start; gap:8px; font-size:12px; color:var(--muted); margin:-6px 0 12px; cursor:pointer; text-transform:none; font-weight:400; letter-spacing:normal;">
           <input type="checkbox" id="requestPlanSaveForEveryone" checked style="margin-top:2px;">
-          <span>Save this as the official drawing for this level — everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
+          <span>Save the first drawing as the official drawing for this level — everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
         </label>
         <div id="requestPlanUploadStatus" style="display:none; font-size:12px; font-weight:700; margin:-6px 0 12px;"></div>
       </div>
-      <div id="requestPdfMarkerWrap" style="display:none;">
-        <div class="field" style="border-bottom:none;">
-          <label>Mark the exact spot (tap the drawing)</label>
-          <div class="plan-box" id="requestPlanBox">
-            <img class="plan-image" id="requestPlanImage" alt="">
-            <div class="plan-marker" id="requestPlanMarker"></div>
-          </div>
-          <div class="plan-readout">
-            <span id="requestPlanReadout">Tap the drawing above to drop a pin.</span>
-            <button type="button" id="removeRequestPlanBtn" class="danger small">Remove Drawing</button>
-            <button type="button" id="clearRequestMarkerBtn" class="secondary small">Clear Pin</button>
-          </div>
-        </div>
-      </div>
+      <div id="requestPlansList"></div>
       <div class="field">
         <label>What's happened?</label>
         <textarea id="requestNotes" placeholder="Describe what happened..."></textarea>
       </div>
       <div class="field">
         <label>Photos (optional)</label>
-        <input type="file" id="requestPhotoInput" accept="image/*" multiple capture="environment">
+        <input type="file" id="requestPhotoInput" accept="image/*" multiple>
         <div class="photo-grid" id="requestPhotoPreview"></div>
       </div>
       <button type="button" id="submitRequestBtn">Send Request</button>
@@ -2011,36 +1998,48 @@ document.getElementById('planBox').addEventListener('click', (ev) => {
 
 document.getElementById('clearMarkerBtn').onclick = clearAreaMarker;
 
-let currentRequestMarker = null;
-let currentRequestPlanImage = null;
+let currentRequestPlans = [];
 
-function clearRequestAreaMarker(){
-  currentRequestMarker = null;
-  document.getElementById('requestPlanMarker').style.display = 'none';
-  document.getElementById('requestPlanReadout').textContent = 'Tap the drawing above to drop a pin.';
+function renderRequestPlansList(){
+  const container = document.getElementById('requestPlansList');
+  if(!container) return;
+  if(!currentRequestPlans.length){
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = currentRequestPlans.map((p, i) => `
+    <div class="field" style="border-bottom:none;">
+      <label>${currentRequestPlans.length > 1 ? `Drawing ${i + 1} — ` : ''}Mark the exact spot (tap the drawing)</label>
+      <div class="plan-box" data-plan-index="${i}">
+        <img class="plan-image" src="${p.image}" style="display:block;">
+        <div class="plan-marker" style="${p.marker ? `display:block; left:${p.marker.x}%; top:${p.marker.y}%;` : ''}"></div>
+      </div>
+      <div class="plan-readout">
+        <span>${p.marker ? `Pin at ${p.marker.x}%, ${p.marker.y}%` : 'Tap the drawing above to drop a pin.'}</span>
+        <button type="button" class="danger small" onclick="removeRequestPlanAt(${i})">Remove Drawing</button>
+        ${p.marker ? `<button type="button" class="secondary small" onclick="clearRequestPlanMarkerAt(${i})">Clear Pin</button>` : ''}
+      </div>
+    </div>
+  `).join('');
 }
 
-function setRequestAreaMarker(xPct, yPct){
-  currentRequestMarker = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
-  const marker = document.getElementById('requestPlanMarker');
-  marker.style.left = currentRequestMarker.x + '%';
-  marker.style.top = currentRequestMarker.y + '%';
-  marker.style.display = 'block';
-  document.getElementById('requestPlanReadout').textContent = `Pin at ${currentRequestMarker.x}%, ${currentRequestMarker.y}%`;
+function clearRequestPlanMarkerAt(i){
+  if(!currentRequestPlans[i]) return;
+  currentRequestPlans[i].marker = null;
+  renderRequestPlansList();
 }
+window.clearRequestPlanMarkerAt = clearRequestPlanMarkerAt;
 
 function resetRequestPlanUpload(){
-  currentRequestPlanImage = null;
-  clearRequestAreaMarker();
-  document.getElementById('requestPdfMarkerWrap').style.display = 'none';
-  document.getElementById('requestPlanImage').src = '';
+  currentRequestPlans = [];
+  renderRequestPlansList();
   document.getElementById('requestPlanFileInput').value = '';
   document.getElementById('requestPlanUploadStatus').style.display = 'none';
 }
 
-document.getElementById('removeRequestPlanBtn').onclick = async () => {
+async function removeRequestPlanAt(i){
   const level = document.getElementById('requestLevel').value;
-  const isSitePlan = !!(level && customLevelPlans[level]);
+  const isSitePlan = i === 0 && !!(level && customLevelPlans[level]);
   if(isSitePlan && isManagement()){
     if(!confirm(`Remove the saved drawing for ${level}? This removes it for everyone.`)) return;
     delete customLevelPlans[level];
@@ -2048,14 +2047,16 @@ document.getElementById('removeRequestPlanBtn').onclick = async () => {
     renderLevelsManager();
     renderEntries();
   }
-  resetRequestPlanUpload();
+  currentRequestPlans.splice(i, 1);
+  renderRequestPlansList();
   const statusEl = document.getElementById('requestPlanUploadStatus');
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--muted)';
   statusEl.textContent = (isSitePlan && isManagement())
     ? '🗑️ Drawing removed for everyone.'
     : '🗑️ Drawing removed from this report.';
-};
+}
+window.removeRequestPlanAt = removeRequestPlanAt;
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
   const level = ev.target.value;
@@ -2066,55 +2067,41 @@ document.getElementById('requestLevel').addEventListener('change', (ev) => {
 
   const existingPlan = level ? getPlanForLevel(level) : null;
   if(existingPlan){
-    currentRequestPlanImage = existingPlan;
-    const wrap = document.getElementById('requestPdfMarkerWrap');
-    const planImage = document.getElementById('requestPlanImage');
-    const planBox = document.getElementById('requestPlanBox');
+    currentRequestPlans = [{ image: existingPlan, marker: null }];
+    renderRequestPlansList();
     const statusEl = document.getElementById('requestPlanUploadStatus');
-    planImage.onload = () => {
-      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
-    };
-    planImage.src = existingPlan;
-    planImage.style.display = 'block';
-    wrap.style.display = 'block';
     statusEl.style.display = 'block';
     statusEl.style.color = 'var(--muted)';
-    statusEl.textContent = `📋 Showing the saved drawing for ${level}. Tap it to mark your spot, or upload a new file to replace it.`;
+    statusEl.textContent = `📋 Showing the saved drawing for ${level}. Tap it to mark your spot, add more drawings, or remove it.`;
   }
 });
 
 document.getElementById('requestPlanFileInput').addEventListener('change', async (ev) => {
-  const file = ev.target.files[0];
+  const files = Array.from(ev.target.files || []);
   ev.target.value = '';
-  if(!file) return;
-  const wrap = document.getElementById('requestPdfMarkerWrap');
-  const planImage = document.getElementById('requestPlanImage');
-  const planBox = document.getElementById('requestPlanBox');
+  if(!files.length) return;
   const statusEl = document.getElementById('requestPlanUploadStatus');
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--muted)';
-  statusEl.textContent = 'Processing…';
+  statusEl.textContent = files.length > 1 ? 'Processing…' : 'Processing…';
   try{
-    const dataUrl = await processLevelPlanFile(file);
-    currentRequestPlanImage = dataUrl;
-    planImage.onload = () => {
-      planBox.style.aspectRatio = planImage.naturalWidth + ' / ' + planImage.naturalHeight;
-    };
-    planImage.src = dataUrl;
-    planImage.style.display = 'block';
-    wrap.style.display = 'block';
-    clearRequestAreaMarker();
+    for(const file of files){
+      const wasFirstEver = currentRequestPlans.length === 0;
+      const dataUrl = await processLevelPlanFile(file);
+      currentRequestPlans.push({ image: dataUrl, marker: null });
+      renderRequestPlansList();
 
-    const level = document.getElementById('requestLevel').value;
-    const saveForEveryone = document.getElementById('requestPlanSaveForEveryone');
-    if(isManagement() && level && saveForEveryone && saveForEveryone.checked){
-      customLevelPlans[level] = dataUrl;
-      await saveLevelPlan(level, dataUrl);
-      statusEl.style.color = 'var(--ok, #16794d)';
-      statusEl.textContent = `✅ Saved as the drawing for ${level} — everyone can see it now.`;
-    } else {
-      statusEl.style.color = 'var(--ok, #16794d)';
-      statusEl.textContent = '✅ Added — attached to this report only.';
+      const level = document.getElementById('requestLevel').value;
+      const saveForEveryone = document.getElementById('requestPlanSaveForEveryone');
+      if(wasFirstEver && isManagement() && level && saveForEveryone && saveForEveryone.checked){
+        customLevelPlans[level] = dataUrl;
+        await saveLevelPlan(level, dataUrl);
+        statusEl.style.color = 'var(--ok, #16794d)';
+        statusEl.textContent = `✅ Saved as the drawing for ${level} — everyone can see it now.`;
+      } else {
+        statusEl.style.color = 'var(--ok, #16794d)';
+        statusEl.textContent = '✅ Added — attached to this report only.';
+      }
     }
   }catch(err){
     statusEl.style.color = 'var(--danger)';
@@ -2122,14 +2109,17 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
   }
 });
 
-document.getElementById('requestPlanBox').addEventListener('click', (ev) => {
-  const rect = ev.currentTarget.getBoundingClientRect();
+document.getElementById('requestPlansList').addEventListener('click', (ev) => {
+  const box = ev.target.closest('.plan-box');
+  if(!box) return;
+  const i = Number(box.dataset.planIndex);
+  if(!currentRequestPlans[i]) return;
+  const rect = box.getBoundingClientRect();
   const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
   const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
-  setRequestAreaMarker(xPct, yPct);
+  currentRequestPlans[i].marker = { x: Math.round(xPct * 10) / 10, y: Math.round(yPct * 10) / 10 };
+  renderRequestPlansList();
 });
-
-document.getElementById('clearRequestMarkerBtn').onclick = clearRequestAreaMarker;
 
 let currentLocationMarker = null;
 
@@ -4003,7 +3993,8 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     alert('Add a description or a photo before sending the request.');
     return;
   }
-  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0) + (currentRequestPlanImage ? currentRequestPlanImage.length : 0);
+  const planImagesBytes = currentRequestPlans.reduce((sum, p) => sum + (p.image ? p.image.length : 0), 0);
+  const photosBytes = photos.reduce((sum, p) => sum + p.length, 0) + planImagesBytes;
   if(photosBytes > MAX_ENTRY_PHOTOS_BYTES){
     alert('These photos are too large to sync. Please remove one and try again.');
     return;
@@ -4015,8 +4006,9 @@ document.getElementById('submitRequestBtn').onclick = async () => {
   try{
     await siteCollection('entryRequests').add({
       type, level, area, notes, photos,
-      planImage: currentRequestPlanImage || null,
-      marker: currentRequestMarker || null,
+      planImage: currentRequestPlans[0] ? currentRequestPlans[0].image : null,
+      marker: currentRequestPlans[0] ? currentRequestPlans[0].marker : null,
+      planImages: currentRequestPlans.length ? currentRequestPlans : [],
       submittedByName: currentSession.name,
       submittedByRole: currentSession.roleLabel,
       submittedByUsername: currentSession.username,
@@ -4055,11 +4047,14 @@ function renderRequestCard(r, showActions, listKey){
   if(r.level) locationBits.push('Level: ' + escapeHtml(r.level));
   if(r.area) locationBits.push('Area: ' + escapeHtml(r.area));
   const locationHtml = locationBits.length ? `<div class="entry-tags">${locationBits.join(' · ')}</div>` : '';
-  const planHtml = r.planImage
-    ? `<div class="plan-box" style="margin-bottom:10px;">
-        <img class="plan-image" src="${r.planImage}" style="display:block;">
-        ${r.marker ? `<div class="plan-marker" style="left:${r.marker.x}%; top:${r.marker.y}%; display:block;"></div>` : ''}
-      </div>`
+  const plans = (r.planImages && r.planImages.length) ? r.planImages : (r.planImage ? [{ image: r.planImage, marker: r.marker }] : []);
+  const planHtml = plans.length
+    ? plans.map(p => `
+        <div class="plan-box" style="margin-bottom:10px;">
+          <img class="plan-image" src="${p.image}" style="display:block;">
+          ${p.marker ? `<div class="plan-marker" style="left:${p.marker.x}%; top:${p.marker.y}%; display:block;"></div>` : ''}
+        </div>
+      `).join('')
     : '';
   const actionsHtml = (showActions && r.status === 'pending')
     ? `<div class="entry-actions">
@@ -4172,6 +4167,7 @@ async function useRequestForEntry(id){
       area,
       areaMarker: r.marker || null,
       planImage: r.planImage || null,
+      planImages: r.planImages || [],
       taskType: '',
       progress: '',
       taskStart: '',
