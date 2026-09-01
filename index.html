@@ -857,9 +857,9 @@
     </div>
 
     <div class="card">
-      <h2>Entry Requests from Labourers</h2>
+      <h2>Entry Requests from the Team</h2>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 12px;">
-        Requests submitted from the Labourer account. Accept one to add it straight to Log Entries, or reject it.
+        Requests submitted by any worker. Accept one to add it straight to Log Entries, or reject it.
       </p>
       <div id="requestsList"></div>
     </div>
@@ -3990,7 +3990,7 @@ async function attachTaskResponsePhoto(id, inputEl){
 }
 window.attachTaskResponsePhoto = attachTaskResponsePhoto;
 
-// ---- Entry Requests (labourers request, management actions) ----
+// ---- Entry Requests (any worker requests, management actions) ----
 
 document.getElementById('submitRequestBtn').onclick = async () => {
   const type = document.getElementById('requestType').value;
@@ -4124,19 +4124,20 @@ function renderRequests(){
   const myList = document.getElementById('myRequestsList');
   if(myList){
     const heading = document.getElementById('myRequestsHeading');
+    const pending = sorted.filter(r => r.status === 'pending');
     if(isManagement()){
-      if(heading) heading.textContent = 'Entry Requests from Labourers';
-      myList.innerHTML = sorted.length
-        ? sorted.map(r => renderRequestCard(r, true, 'mine')).join('')
-        : '<div class="empty">No requests yet.</div>';
+      if(heading) heading.textContent = 'Entry Requests from the Team';
+      myList.innerHTML = pending.length
+        ? pending.map(r => renderRequestCard(r, true, 'mine')).join('')
+        : '<div class="empty">No pending requests.</div>';
     } else {
       if(heading) heading.textContent = 'Your Requests';
-      const mine = sorted.filter(r => r.submittedByUsername
+      const mine = pending.filter(r => r.submittedByUsername
         ? r.submittedByUsername === currentSession.username
         : r.submittedByName === currentSession.name);
       myList.innerHTML = mine.length
         ? mine.map(r => renderRequestCard(r, false, 'mine')).join('')
-        : '<div class="empty">You haven\'t sent any requests yet.</div>';
+        : '<div class="empty">No pending requests.</div>';
     }
   }
 
@@ -4187,7 +4188,9 @@ async function useRequestForEntry(id){
       `<strong>When:</strong> ${new Date().toLocaleString()}`
     ];
     notifySiteRecipients(updateSubject, updateLines);
-    sendPushNotification(['labourer'], 'Your request was accepted', `${currentSession.name} added it to the log.`);
+    if(r.submittedByUsername){
+      sendPushNotificationToUser(r.submittedByUsername, 'Your request was accepted', `${currentSession.name} added it to the log.`);
+    }
 
     showTab('log');
     setTimeout(() => {
@@ -4205,10 +4208,13 @@ window.useRequestForEntry = useRequestForEntry;
 
 async function dismissRequest(id){
   try{
+    const r = entryRequests.find(x => x.id === id);
     await siteCollection('entryRequests').doc(id).update({ status: 'dismissed' });
-    sendPushNotification(['labourer'], 'Your request was dismissed', `${currentSession.name} reviewed it but didn't create a log entry.`);
+    if(r && r.submittedByUsername){
+      sendPushNotificationToUser(r.submittedByUsername, 'Your request was rejected', `${currentSession.name} reviewed it but didn't create a log entry.`);
+    }
   }catch(err){
-    alert('Failed to dismiss request: ' + err.message);
+    alert('Failed to reject request: ' + err.message);
   }
 }
 window.dismissRequest = dismissRequest;
