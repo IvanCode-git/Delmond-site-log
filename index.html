@@ -147,7 +147,7 @@
   .entry-tags{font-size:12px; color:var(--muted); margin-top:4px;}
   footer{text-align:center; color:var(--muted); font-size:12px; padding:20px;}
 
-  #lockScreen{
+  #lockScreen, #signupScreen{
     position:fixed; inset:0; background:var(--accent);
     display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px;
   }
@@ -164,6 +164,18 @@
     transition:border-color .15s ease, box-shadow .15s ease;
   }
   .lock-box input:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px var(--accent-light);}
+  .lock-box select{
+    width:100%; text-align:center; text-align-last:center; font-size:16px; background:#fff;
+    padding:12px; border:1.5px solid var(--border); border-radius:9px; margin-bottom:12px;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .lock-box select:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px var(--accent-light);}
+  .link-btn{
+    background:none !important; color:var(--accent) !important; border:none !important; box-shadow:none !important;
+    font-size:12px !important; font-weight:600 !important; padding:8px !important; margin-top:4px; cursor:pointer;
+  }
+  .link-btn:hover{text-decoration:underline;}
+  #signupError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px; font-weight:600;}
   .password-field{position:relative;}
   .password-field input{padding-right:40px !important;}
   #togglePasswordBtn{
@@ -173,7 +185,7 @@
   }
   #togglePasswordBtn:hover{opacity:1;}
   #pinError{color:var(--danger); font-size:12px; min-height:16px; margin-bottom:8px; font-weight:600;}
-  #lockScreen button{width:100%;}
+  #lockScreen button, #signupScreen button{width:100%;}
   #sitePickerScreen{
     position:fixed; inset:0; background:var(--accent);
     display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px;
@@ -395,6 +407,27 @@
     </div>
     <div id="pinError"></div>
     <button id="pinSubmitBtn">Sign In</button>
+    <button type="button" id="showSignupBtn" class="link-btn">New here? Create your account</button>
+  </div>
+</div>
+
+<div id="signupScreen" style="display:none;">
+  <div class="lock-box">
+    <img src="icons/icon-192.png" alt="Delmond">
+    <h2>Create Your Account</h2>
+    <p>For labourers, fixers, and jointers joining the crew.</p>
+    <input type="text" id="signupName" placeholder="Full Name" autocomplete="off">
+    <select id="signupTrade">
+      <option value="labourer">Labourer</option>
+      <option value="fixers">Fixer</option>
+      <option value="jointers">Jointer</option>
+    </select>
+    <select id="signupSite" style="display:none;"></select>
+    <input type="text" id="signupUsername" placeholder="Choose a Username" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+    <input type="text" id="signupPassword" placeholder="Choose a Password" autocomplete="new-password">
+    <div id="signupError"></div>
+    <button id="signupSubmitBtn">Create Account</button>
+    <button type="button" id="backToSigninBtn" class="link-btn">Back to Sign In</button>
   </div>
 </div>
 
@@ -1207,6 +1240,80 @@ function showLockScreen(){
 function hideLockScreen(){
   document.getElementById('lockScreen').style.display = 'none';
 }
+
+function showSignupScreen(){
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('signupScreen').style.display = 'flex';
+  document.getElementById('signupName').value = '';
+  document.getElementById('signupUsername').value = '';
+  document.getElementById('signupPassword').value = '';
+  document.getElementById('signupTrade').value = 'labourer';
+  document.getElementById('signupError').textContent = '';
+  const siteSel = document.getElementById('signupSite');
+  if(sites.length > 1){
+    siteSel.innerHTML = sites.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || 'Untitled site')}</option>`).join('');
+    siteSel.style.display = '';
+  } else {
+    siteSel.style.display = 'none';
+  }
+  document.getElementById('signupName').focus();
+}
+function hideSignupScreen(){
+  document.getElementById('signupScreen').style.display = 'none';
+}
+document.getElementById('showSignupBtn').onclick = showSignupScreen;
+document.getElementById('backToSigninBtn').onclick = () => {
+  hideSignupScreen();
+  showLockScreen();
+};
+
+document.getElementById('signupSubmitBtn').onclick = async () => {
+  const name = document.getElementById('signupName').value.trim();
+  const trade = document.getElementById('signupTrade').value;
+  const username = document.getElementById('signupUsername').value.trim().toLowerCase();
+  const password = document.getElementById('signupPassword').value.trim();
+  const errorEl = document.getElementById('signupError');
+  errorEl.textContent = '';
+
+  if(!name || !username || !password){
+    errorEl.textContent = 'Fill in your name, username, and password.';
+    return;
+  }
+  if(USERS[username]){
+    errorEl.textContent = 'That username is already taken — choose another.';
+    return;
+  }
+  const siteId = sites.length > 1 ? document.getElementById('signupSite').value : (sites[0] && sites[0].id);
+  if(!siteId){
+    errorEl.textContent = 'No sites have been set up yet. Ask an engineer to create one.';
+    return;
+  }
+
+  const btn = document.getElementById('signupSubmitBtn');
+  btn.disabled = true;
+  try{
+    const existing = await db.collectionGroup('workers').where('username', '==', username).limit(1).get();
+    if(!existing.empty){
+      errorEl.textContent = 'That username is already taken — choose another.';
+      return;
+    }
+    await db.collection('sites').doc(siteId).collection('workers').doc(username).set({
+      name,
+      trade,
+      username,
+      password,
+      active: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: 'self-signup'
+    });
+    hideSignupScreen();
+    finishLogin({ username, role: trade, name, roleLabel: TRADE_LABELS[trade] || trade }, siteId);
+  }catch(err){
+    errorEl.textContent = 'Failed to create account: ' + err.message;
+  }finally{
+    btn.disabled = false;
+  }
+};
 
 function applySession(){
   document.getElementById('sessionPill').textContent = currentSession
