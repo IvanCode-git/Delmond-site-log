@@ -1758,10 +1758,18 @@ renderLevelsManager();
 
 async function saveLevelsConfig(){
   try{
-    await siteCollection('meta').doc('levelsConfig').set({ levels: levelsList, plans: customLevelPlans });
+    await siteCollection('meta').doc('levelsConfig').set({ levels: levelsList });
   }catch(err){
     alert('Failed to save levels: ' + err.message);
   }
+}
+
+async function saveLevelPlan(levelName, dataUrl){
+  await siteCollection('levelPlans').doc(levelName).set({ image: dataUrl });
+}
+
+async function deleteLevelPlanDoc(levelName){
+  try{ await siteCollection('levelPlans').doc(levelName).delete(); }catch(e){ /* ignore */ }
 }
 
 async function removeLevel(levelName){
@@ -1773,6 +1781,7 @@ async function removeLevel(levelName){
   levelsList = levelsList.filter(l => l !== levelName);
   delete customLevelPlans[levelName];
   await saveLevelsConfig();
+  await deleteLevelPlanDoc(levelName);
   populateLevelSelect(document.getElementById('entryLevel'));
   renderLevelsManager();
 }
@@ -1901,7 +1910,7 @@ async function handleLevelPlanUpload(levelName, file, row){
   try{
     const dataUrl = await processLevelPlanFile(file);
     customLevelPlans[levelName] = dataUrl;
-    await saveLevelsConfig();
+    await saveLevelPlan(levelName, dataUrl);
     renderLevelsManager();
     renderEntries();
     if(document.getElementById('entryLevel').value === levelName){
@@ -2037,7 +2046,7 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
     const saveForEveryone = document.getElementById('requestPlanSaveForEveryone');
     if(isManagement() && level && saveForEveryone && saveForEveryone.checked){
       customLevelPlans[level] = dataUrl;
-      await saveLevelsConfig();
+      await saveLevelPlan(level, dataUrl);
       statusEl.style.color = 'var(--ok, #16794d)';
       statusEl.textContent = `✅ Saved as the drawing for ${level} — everyone can see it now.`;
     } else {
@@ -2278,11 +2287,9 @@ function switchToSite(siteId, retriesLeft){
   siteListenerUnsubs.levelsConfig = siteCollection('meta').doc('levelsConfig').onSnapshot((doc) => {
     if(doc.exists && Array.isArray(doc.data().levels) && doc.data().levels.length){
       levelsList = doc.data().levels;
-      customLevelPlans = doc.data().plans || {};
     } else {
       levelsList = LEVELS.slice();
-      customLevelPlans = {};
-      siteCollection('meta').doc('levelsConfig').set({ levels: levelsList, plans: {} })
+      siteCollection('meta').doc('levelsConfig').set({ levels: levelsList })
         .catch((e) => console.warn('Could not seed levels config', e));
     }
     populateLevelSelect(document.getElementById('entryLevel'));
@@ -2290,6 +2297,17 @@ function switchToSite(siteId, retriesLeft){
     populateLevelSelect(document.getElementById('locationLevel'));
     renderLevelsManager();
     renderEntries();
+  }, handleSyncError);
+
+  siteListenerUnsubs.levelPlans = siteCollection('levelPlans').onSnapshot((snapshot) => {
+    customLevelPlans = {};
+    snapshot.docs.forEach((doc) => {
+      customLevelPlans[doc.id] = doc.data().image;
+    });
+    renderLevelsManager();
+    renderEntries();
+    const currentEntryLevel = document.getElementById('entryLevel').value;
+    if(currentEntryLevel) loadLevelPlan(currentEntryLevel);
   }, handleSyncError);
 
   siteListenerUnsubs.notificationSettings = siteCollection('meta').doc('notificationSettings').onSnapshot((doc) => {
@@ -2478,7 +2496,7 @@ async function createSite(){
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: currentSession ? currentSession.username : null
     });
-    await newSiteRef.collection('meta').doc('levelsConfig').set({ levels: LEVELS.slice(), plans: {} });
+    await newSiteRef.collection('meta').doc('levelsConfig').set({ levels: LEVELS.slice() });
     await newSiteRef.collection('meta').doc('entryTypesConfig').set({ types: DEFAULT_ENTRY_TYPES.slice() });
     nameInput.value = '';
     switchToSite(newSiteRef.id);
