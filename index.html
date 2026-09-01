@@ -902,6 +902,7 @@
           <input type="checkbox" id="requestPlanSaveForEveryone" checked style="margin-top:2px;">
           <span>Save this as the official drawing for this level — everyone sees it (Working Locations, future reports), and you won't need to upload it again.</span>
         </label>
+        <div id="requestPlanUploadStatus" style="display:none; font-size:12px; font-weight:700; margin:-6px 0 12px;"></div>
       </div>
       <div id="requestPdfMarkerWrap" style="display:none;">
         <div class="field" style="border-bottom:none;">
@@ -2000,6 +2001,7 @@ function resetRequestPlanUpload(){
   document.getElementById('requestPdfMarkerWrap').style.display = 'none';
   document.getElementById('requestPlanImage').src = '';
   document.getElementById('requestPlanFileInput').value = '';
+  document.getElementById('requestPlanUploadStatus').style.display = 'none';
 }
 
 document.getElementById('requestLevel').addEventListener('change', (ev) => {
@@ -2016,6 +2018,10 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
   const wrap = document.getElementById('requestPdfMarkerWrap');
   const planImage = document.getElementById('requestPlanImage');
   const planBox = document.getElementById('requestPlanBox');
+  const statusEl = document.getElementById('requestPlanUploadStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Processing…';
   try{
     const dataUrl = await processLevelPlanFile(file);
     currentRequestPlanImage = dataUrl;
@@ -2032,9 +2038,15 @@ document.getElementById('requestPlanFileInput').addEventListener('change', async
     if(isManagement() && level && saveForEveryone && saveForEveryone.checked){
       customLevelPlans[level] = dataUrl;
       await saveLevelsConfig();
+      statusEl.style.color = 'var(--ok, #16794d)';
+      statusEl.textContent = `✅ Saved as the drawing for ${level} — everyone can see it now.`;
+    } else {
+      statusEl.style.color = 'var(--ok, #16794d)';
+      statusEl.textContent = '✅ Added — attached to this report only.';
     }
   }catch(err){
-    alert('Could not process that file: ' + err.message);
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Could not process that file: ' + err.message;
   }
 });
 
