@@ -3996,14 +3996,33 @@ function renderTasks(){
         `).join('')
       : '<div class="empty" style="padding:6px 0;">No responses yet.</div>';
 
+    const startedAtDate = t.startedAt && t.startedAt.toDate ? t.startedAt.toDate() : null;
+    const startBtn = (!t.completed && !startedAtDate)
+      ? `<button type="button" class="secondary small" onclick="startTask('${t.id}')">▶️ Start Task</button>`
+      : '';
+    const startedBadge = (startedAtDate && !t.completed)
+      ? `<div class="entry-tags">🔧 Started ${startedAtDate.toLocaleString()}${t.startedByName ? ' by ' + escapeHtml(t.startedByName) : ''}</div>`
+      : '';
+    let durationBadge = '';
+    if(t.completed && t.completedAt && t.completedAt.toDate){
+      const beganAt = startedAtDate || (t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null);
+      if(beganAt){
+        const ms = Math.max(0, t.completedAt.toDate() - beganAt);
+        durationBadge = `<div class="entry-tags">⏱ Took ${formatDuration(ms)}${startedAtDate ? '' : ' (never marked started — timed from assignment)'}</div>`;
+      }
+    }
+
     return `
       <div class="entry-item">
         <div class="entry-detail open">
           <div class="entry-tags">Assigned by ${escapeHtml(t.assignedByName || '')} (${escapeHtml(t.assignedByRole || '')}) → ${escapeHtml(t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'])} &nbsp;${dtStr}${t.completed ? '<span class="completed-badge">Completed</span>' : ''}</div>
           ${(t.notifyEmails && t.notifyEmails.length) ? `<div class="entry-tags">📧 Notifies on completion: ${escapeHtml(t.notifyEmails.join(', '))}</div>` : ''}
+          ${startedBadge}
+          ${durationBadge}
           <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
           ${photosHtml}
           <div class="entry-actions">
+            ${startBtn}
             <button type="button" class="secondary small" onclick="toggleTaskComplete('${t.id}', ${t.completed ? 'false' : 'true'})">${t.completed ? '↩️ Reopen' : '✅ Mark Complete'}</button>
             ${isManagement() ? `<button type="button" class="danger small" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
           </div>
@@ -4040,7 +4059,8 @@ async function toggleTaskComplete(id, makeComplete){
     if(makeComplete){
       const task = tasks.find(t => t.id === id);
       if(task){
-        const start = task.createdAt && task.createdAt.toDate ? task.createdAt.toDate() : null;
+        const startedAt = task.startedAt && task.startedAt.toDate ? task.startedAt.toDate() : null;
+        const start = startedAt || (task.createdAt && task.createdAt.toDate ? task.createdAt.toDate() : null);
         const finish = new Date();
         const durationMs = start ? Math.max(0, finish - start) : 0;
         const targetLabel = task.targetUsername
@@ -4052,9 +4072,9 @@ async function toggleTaskComplete(id, makeComplete){
           `<strong>Task:</strong> ${escapeHtml(task.message || '')}`,
           `<strong>Assigned by:</strong> ${escapeHtml(task.assignedByName || '')}`,
           `<strong>Assigned to:</strong> ${escapeHtml(targetLabel)}`,
-          `<strong>Started:</strong> ${start ? start.toLocaleString() : 'Unknown'}`,
+          `<strong>${startedAt ? 'Started' : 'Assigned'}:</strong> ${start ? start.toLocaleString() : 'Unknown'}`,
           `<strong>Finished:</strong> ${finish.toLocaleString()}`,
-          `<strong>Duration:</strong> ${formatDuration(durationMs)}`,
+          `<strong>Duration:</strong> ${formatDuration(durationMs)}${startedAt ? '' : ' (timed from assignment — never marked started)'}`,
           `<strong>Completed by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
           lastComment ? `<strong>Latest update:</strong> ${escapeHtml(lastComment.text || '')}` : ''
         ];
@@ -4067,6 +4087,19 @@ async function toggleTaskComplete(id, makeComplete){
   }
 }
 window.toggleTaskComplete = toggleTaskComplete;
+
+async function startTask(id){
+  try{
+    await siteCollection('tasks').doc(id).update({
+      startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      startedByName: currentSession.name,
+      startedByUsername: currentSession.username
+    });
+  }catch(err){
+    alert('Failed to start task: ' + err.message);
+  }
+}
+window.startTask = startTask;
 
 async function deleteTask(id){
   if(!confirm('Delete this task? This cannot be undone.')) return;
@@ -5032,13 +5065,20 @@ function buildTasksReportRows(dateStr, period){
     row['Sent To'] = t.targetUsername ? ((workers.find(w => w.username === t.targetUsername) || {}).name || t.targetUsername) : TARGET_ROLE_LABELS[t.targetRole || 'labourer'];
     row['Assigned By'] = t.assignedByName || '';
     row['Status'] = t.completed ? 'Completed' : 'Active';
+    row['Started'] = (t.startedAt && t.startedAt.toDate) ? t.startedAt.toDate().toLocaleString() : '';
+    row['Duration'] = (t.completed && t.completedAt && t.completedAt.toDate)
+      ? (() => {
+          const beganAt = (t.startedAt && t.startedAt.toDate) ? t.startedAt.toDate() : dt;
+          return formatDuration(Math.max(0, t.completedAt.toDate() - beganAt));
+        })()
+      : '';
     row['Responses'] = (t.comments || []).length;
     return row;
   });
 }
 
 function tasksReportWidths(period){
-  const base = [{ wch: 10 }, { wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 10 }];
+  const base = [{ wch: 10 }, { wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 10 }];
   return period !== 'daily' ? [{ wch: 12 }].concat(base) : base;
 }
 
