@@ -2362,6 +2362,7 @@ function tradeColor(trade){ return TRADE_COLORS[trade] || '#6b7280'; }
 let currentPhotos = [];
 let currentTaskPhotos = [];
 let currentRequestPhotos = [];
+const taskCompletionStaging = {};
 let currentAudioBlob = null;
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -3985,6 +3986,15 @@ function renderTasks(){
     const photosHtml = (t.photos && t.photos.length)
       ? `<div class="entry-photos">${t.photos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
       : '';
+    const completionPhotosHtml = (t.completionPhotos && t.completionPhotos.length)
+      ? `<div class="entry-tags">✅ Completion photos</div><div class="entry-photos">${t.completionPhotos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
+      : '';
+    const completionAttachHtml = !t.completed ? `
+      <div class="field" style="margin-top:8px;">
+        <label class="secondary small" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; width:fit-content;">📎 Attach photo/PDF before completing<input type="file" accept="image/*,.pdf" multiple style="display:none;" onchange="handleTaskCompletePhotoInput('${t.id}', this)"></label>
+        <div class="photo-grid" id="taskCompletePreview-${t.id}"></div>
+      </div>
+    ` : '';
     const commentsHtml = (t.comments && t.comments.length)
       ? t.comments.map(c => `
           <div class="comment-item">
@@ -4021,6 +4031,8 @@ function renderTasks(){
           ${durationBadge}
           <div class="entry-body">${t.message ? escapeHtml(t.message) : '<em>No message</em>'}</div>
           ${photosHtml}
+          ${completionPhotosHtml}
+          ${completionAttachHtml}
           <div class="entry-actions">
             ${startBtn}
             <button type="button" class="secondary small" onclick="toggleTaskComplete('${t.id}', ${t.completed ? 'false' : 'true'})">${t.completed ? '↩️ Reopen' : '✅ Mark Complete'}</button>
@@ -4037,11 +4049,29 @@ function renderTasks(){
       </div>
     `;
   }).join('');
+
+  sorted.forEach(t => {
+    if(!t.completed && taskCompletionStaging[t.id] && taskCompletionStaging[t.id].length){
+      renderTaskCompletionPreview(t.id);
+    }
+  });
 }
 
 function tsOf(ts){
   return (ts && ts.toDate) ? ts.toDate().getTime() : 0;
 }
+
+function renderTaskCompletionPreview(id){
+  renderPhotoGrid('taskCompletePreview-' + id, taskCompletionStaging[id] || []);
+}
+
+async function handleTaskCompletePhotoInput(id, inputEl){
+  const files = Array.from(inputEl.files);
+  inputEl.value = '';
+  if(!taskCompletionStaging[id]) taskCompletionStaging[id] = [];
+  await addPhotosToArray(files, taskCompletionStaging[id], () => renderTaskCompletionPreview(id));
+}
+window.handleTaskCompletePhotoInput = handleTaskCompletePhotoInput;
 
 async function toggleTaskComplete(id, makeComplete){
   try{
@@ -4050,6 +4080,15 @@ async function toggleTaskComplete(id, makeComplete){
       update.completedByName = currentSession.name;
       update.completedByUsername = currentSession.username;
       update.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+      const staged = (taskCompletionStaging[id] || []).map(p => p.preview);
+      if(staged.length){
+        const stagedBytes = staged.reduce((sum, p) => sum + p.length, 0);
+        if(stagedBytes > MAX_ENTRY_PHOTOS_BYTES){
+          alert('These photos are too large to sync. Please remove one and try again.');
+          return;
+        }
+        update.completionPhotos = firebase.firestore.FieldValue.arrayUnion(...staged);
+      }
     } else {
       update.completedByName = null;
       update.completedByUsername = null;
@@ -4057,6 +4096,7 @@ async function toggleTaskComplete(id, makeComplete){
     }
     await siteCollection('tasks').doc(id).update(update);
     if(makeComplete){
+      delete taskCompletionStaging[id];
       const task = tasks.find(t => t.id === id);
       if(task){
         const startedAt = task.startedAt && task.startedAt.toDate ? task.startedAt.toDate() : null;
