@@ -4846,6 +4846,12 @@ function renderWorkingLocations(){
     const canFinish = currentSession && currentSession.username === loc.workerUsername;
     const canSendPdf = isManagement();
     const canDelete = isManagement();
+    const photosHtml = (loc.photos && loc.photos.length)
+      ? `<div class="entry-photos" style="margin-top:10px;">${loc.photos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
+      : '';
+    const addPhotoHtml = canFinish ? `
+      <label class="secondary small" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; margin-top:10px; width:fit-content;">📷 Add progress photo/PDF<input type="file" accept="image/*,.pdf" multiple style="display:none;" onchange="addLocationProgressPhotos('${loc.id}', this)"></label>
+    ` : '';
     const actionsHtml = (canFinish || canSendPdf || canDelete) ? `
       <div class="entry-actions">
         ${canFinish ? `<button type="button" class="secondary" onclick="finishLocation('${loc.id}')">✅ Finished Here</button>` : ''}
@@ -4874,6 +4880,8 @@ function renderWorkingLocations(){
         </div>
         ${descriptionHtml}
         ${markerHtml}
+        ${photosHtml}
+        ${addPhotoHtml}
         ${actionsHtml}
         <div class="section-label" style="margin-top:14px;">Replies</div>
         <div class="comments-list">${commentsHtml}</div>
@@ -4919,6 +4927,54 @@ async function sendLocationReply(id){
   }
 }
 window.sendLocationReply = sendLocationReply;
+
+async function addLocationProgressPhotos(id, inputEl){
+  const files = Array.from(inputEl.files);
+  inputEl.value = '';
+  if(!files.length) return;
+  const loc = workingLocations.find(l => l.id === id);
+  const existing = (loc && loc.photos) || [];
+  const newPhotos = [];
+  for(const f of files){
+    if(existing.length + newPhotos.length >= MAX_PHOTOS_PER_ENTRY){
+      alert(`Up to ${MAX_PHOTOS_PER_ENTRY} photos per check-in — this keeps things small enough to sync to every device.`);
+      break;
+    }
+    try{
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      if(isPdf){
+        const remaining = MAX_PHOTOS_PER_ENTRY - existing.length - newPhotos.length;
+        const { canvases, totalPages } = await renderPdfPagesToCanvases(f, remaining);
+        canvases.forEach(canvas => newPhotos.push(canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY)));
+        if(totalPages > canvases.length){
+          alert(`This PDF has ${totalPages} pages — only the first ${canvases.length} fit here (limit is ${MAX_PHOTOS_PER_ENTRY} photos).`);
+        }
+      } else {
+        const canvas = await fileToCanvas(f);
+        newPhotos.push(canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY));
+      }
+    }catch(err){
+      console.warn('Could not process photo', err);
+    }
+  }
+  if(!newPhotos.length) return;
+  const totalBytes = [...existing, ...newPhotos].reduce((sum, p) => sum + p.length, 0);
+  if(totalBytes > MAX_ENTRY_PHOTOS_BYTES){
+    alert('These photos are too large to sync. Please remove one and try again.');
+    return;
+  }
+  try{
+    await siteCollection('workingLocations').doc(id).update({
+      photos: firebase.firestore.FieldValue.arrayUnion(...newPhotos)
+    });
+    if(loc){
+      sendPushNotification(['pm', 'supervisor', 'engineer'], `${currentSession.name} added a progress photo`, `${loc.level}${loc.description ? ' — ' + loc.description : ''}`);
+    }
+  }catch(err){
+    alert('Failed to add photo: ' + err.message);
+  }
+}
+window.addLocationProgressPhotos = addLocationProgressPhotos;
 
 async function finishLocation(id){
   try{
@@ -5504,6 +5560,9 @@ function renderFinishedLocations(){
     const descriptionHtml = loc.description
       ? `<div class="location-description">${escapeHtml(loc.description)}</div>`
       : '';
+    const photosHtml = (loc.photos && loc.photos.length)
+      ? `<div class="entry-photos" style="margin-top:10px;">${loc.photos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
+      : '';
     return `
       <div class="location-card">
         <div class="location-card-header">
@@ -5515,6 +5574,7 @@ function renderFinishedLocations(){
           </div>
         </div>
         ${descriptionHtml}
+        ${photosHtml}
         <div class="entry-actions">
           <button type="button" class="danger small" onclick="deleteWorkingLocation('${loc.id}')">🗑️ Delete</button>
         </div>
