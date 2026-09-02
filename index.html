@@ -130,10 +130,18 @@
     transition:max-height .28s ease, opacity .2s ease, padding .28s ease;
   }
   .entry-detail.open{max-height:3000px; opacity:1; padding:0 8px 14px;}
-  .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:10px; margin-bottom:10px; cursor:pointer; display:block;}
+  .entry-hero-photo{width:100%; max-height:240px; object-fit:cover; border-radius:10px; cursor:pointer; display:block;}
+  .entry-hero-tile{position:relative; margin-bottom:10px;}
   .entry-body{margin-top:8px; font-size:14px; white-space:pre-wrap;}
   .entry-photos{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
-  .entry-photos img{width:70px; height:70px; object-fit:cover; border-radius:8px; cursor:pointer;}
+  .entry-photo-tile{position:relative; width:70px; height:70px; flex-shrink:0;}
+  .entry-photo-tile img{width:100%; height:100%; object-fit:cover; border-radius:8px; cursor:pointer; display:block;}
+  .entry-photo-download{
+    position:absolute; bottom:-6px; right:-6px; width:22px; height:22px; border-radius:50%;
+    background:var(--accent); color:#fff; border:2px solid #fff; font-size:11px; line-height:1;
+    display:flex; align-items:center; justify-content:center; text-decoration:none;
+  }
+  .entry-hero-tile .entry-photo-download{bottom:16px; right:6px; width:34px; height:34px; font-size:16px;}
   audio{width:100%; margin-top:8px;}
   .rec-row{display:flex; align-items:center; gap:10px; margin-top:6px;}
   .rec-dot{width:10px; height:10px; border-radius:50%; background:var(--danger); display:none;}
@@ -2890,6 +2898,34 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
+// Photos/PDFs are stored as data URLs. window.open() on a data URL is unreliable on
+// mobile (especially installed PWAs), so photos are wrapped in a real <a> (opens in a
+// new tab/context reliably everywhere) plus an explicit download button.
+function photoFilename(dataUrl, index){
+  const ext = /^data:image\/png/.test(dataUrl) ? 'png' : 'jpg';
+  return `photo-${(index || 0) + 1}.${ext}`;
+}
+
+function photoThumbHtml(dataUrl, index){
+  const filename = photoFilename(dataUrl, index);
+  return `
+    <div class="entry-photo-tile">
+      <a href="${dataUrl}" target="_blank" rel="noopener"><img src="${dataUrl}"></a>
+      <a class="entry-photo-download" href="${dataUrl}" download="${filename}" title="Download">⬇</a>
+    </div>
+  `;
+}
+
+function heroPhotoHtml(dataUrl){
+  const filename = photoFilename(dataUrl, 0);
+  return `
+    <div class="entry-hero-tile">
+      <a href="${dataUrl}" target="_blank" rel="noopener"><img class="entry-hero-photo" src="${dataUrl}"></a>
+      <a class="entry-photo-download" href="${dataUrl}" download="${filename}" title="Download">⬇</a>
+    </div>
+  `;
+}
+
 function buildEntryCardHtml(e){
     const dt = new Date(e.dateTime);
     const dtDateStr = isNaN(dt) ? e.dateTime : dt.toLocaleDateString();
@@ -2904,8 +2940,8 @@ function buildEntryCardHtml(e){
     const localMedia = getLocalMedia(e.id);
     const photos = (e.photos && e.photos.length) ? e.photos : (e.hasPhotos ? getLegacyLocalPhotos(e.id) : []);
     const photosAreLegacyLocal = !(e.photos && e.photos.length) && photos.length > 0;
-    const heroPhoto = photos[0] ? `<img class="entry-hero-photo" src="${photos[0]}" onclick="window.open(this.src)">` : '';
-    const restPhotos = photos.slice(1).map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('');
+    const heroPhoto = photos[0] ? heroPhotoHtml(photos[0]) : '';
+    const restPhotos = photos.slice(1).map((p, i) => photoThumbHtml(p, i + 1)).join('');
     const audioHtml = localMedia.audio ? `<audio controls src="${localMedia.audio}"></audio>` : '';
     const notSyncedBits = [];
     if(e.hasPhotos && photos.length === 0) notSyncedBits.push('📷 photo(s)');
@@ -3947,14 +3983,14 @@ function renderTasks(){
     const dt = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
     const dtStr = dt ? dt.toLocaleString() : 'Just now';
     const photosHtml = (t.photos && t.photos.length)
-      ? `<div class="entry-photos">${t.photos.map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('')}</div>`
+      ? `<div class="entry-photos">${t.photos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
       : '';
     const commentsHtml = (t.comments && t.comments.length)
       ? t.comments.map(c => `
           <div class="comment-item">
             <div><strong>${escapeHtml(c.author || '')}</strong>${c.role ? ' · ' + escapeHtml(c.role) : ''}</div>
             ${c.text ? `<div>${escapeHtml(c.text)}</div>` : ''}
-            ${c.photo ? `<img src="${c.photo}" style="width:70px; height:70px; object-fit:cover; border-radius:6px; margin-top:4px; cursor:pointer;" onclick="window.open(this.src)">` : ''}
+            ${c.photo ? `<div style="margin-top:4px;">${photoThumbHtml(c.photo, 0)}</div>` : ''}
             <div class="comment-meta">${isNaN(new Date(c.dateTime)) ? c.dateTime : new Date(c.dateTime).toLocaleString()}</div>
           </div>
         `).join('')
@@ -4169,7 +4205,7 @@ function renderRequestCard(r, showActions, listKey){
   const dt = r.submittedAt && r.submittedAt.toDate ? r.submittedAt.toDate() : null;
   const dtStr = dt ? dt.toLocaleString() : 'Just now';
   const photosHtml = (r.photos && r.photos.length)
-    ? `<div class="entry-photos">${r.photos.map(p => `<img src="${p}" onclick="window.open(this.src)">`).join('')}</div>`
+    ? `<div class="entry-photos">${r.photos.map((p, i) => photoThumbHtml(p, i)).join('')}</div>`
     : '';
   const locationBits = [];
   if(r.level) locationBits.push('Level: ' + escapeHtml(r.level));
