@@ -1986,19 +1986,30 @@ function fileToCanvas(file){
   });
 }
 
-async function renderPdfFirstPageToCanvas(file){
+async function renderPdfPagesToCanvases(file, maxPages){
   if(!window.pdfjsLib) throw new Error('PDF support did not load — try an image file instead.');
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(1);
-  const baseViewport = page.getViewport({ scale: 1 });
-  const scale = 1800 / baseViewport.width;
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-  return canvas;
+  const totalPages = pdf.numPages;
+  const pageCount = maxPages ? Math.min(totalPages, maxPages) : totalPages;
+  const canvases = [];
+  for(let i = 1; i <= pageCount; i++){
+    const page = await pdf.getPage(i);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = 1800 / baseViewport.width;
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    canvases.push(canvas);
+  }
+  return { canvases, totalPages };
+}
+
+async function renderPdfFirstPageToCanvas(file){
+  const { canvases } = await renderPdfPagesToCanvases(file, 1);
+  return canvases[0];
 }
 
 async function processLevelPlanFile(file){
@@ -3509,9 +3520,20 @@ async function addPhotosToArray(files, targetArray, renderFn){
     }
     try{
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      const canvas = isPdf ? await renderPdfFirstPageToCanvas(f) : await fileToCanvas(f);
-      const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
-      targetArray.push({ file: null, preview: dataUrl });
+      if(isPdf){
+        const remaining = MAX_PHOTOS_PER_ENTRY - targetArray.length;
+        const { canvases, totalPages } = await renderPdfPagesToCanvases(f, remaining);
+        canvases.forEach(canvas => {
+          targetArray.push({ file: null, preview: canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY) });
+        });
+        if(totalPages > canvases.length){
+          alert(`This PDF has ${totalPages} pages — only the first ${canvases.length} fit here (limit is ${MAX_PHOTOS_PER_ENTRY} photos). Attach the rest separately if you need them.`);
+        }
+      } else {
+        const canvas = await fileToCanvas(f);
+        const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
+        targetArray.push({ file: null, preview: dataUrl });
+      }
     }catch(err){
       console.warn('Could not process photo', err);
     }
