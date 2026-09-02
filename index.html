@@ -1203,13 +1203,16 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 let notificationSettings = { fromName: '', fromEmail: '', recipients: [] };
 
-async function sendSummaryEmail(to, subject, bodyLines){
+async function sendSummaryEmail(to, subject, bodyLines, photos){
   if(!to) return;
   try{
+    const photosHtml = (photos && photos.length)
+      ? `<div style="margin-top:10px;">${photos.map(p => `<img src="${p}" style="max-width:320px; width:100%; display:block; margin:0 0 10px; border-radius:6px;">`).join('')}</div>`
+      : '';
     const payload = {
       to,
       subject,
-      html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('')
+      html: bodyLines.filter(Boolean).map(line => `<p style="margin:0 0 8px; font-family:sans-serif;">${line}</p>`).join('') + photosHtml
     };
     if(notificationSettings.fromEmail){
       payload.from = notificationSettings.fromName
@@ -1226,8 +1229,8 @@ async function sendSummaryEmail(to, subject, bodyLines){
   }
 }
 
-async function notifySiteRecipients(subject, bodyLines){
-  (notificationSettings.recipients || []).forEach(addr => sendSummaryEmail(addr, subject, bodyLines));
+async function notifySiteRecipients(subject, bodyLines, photos){
+  (notificationSettings.recipients || []).forEach(addr => sendSummaryEmail(addr, subject, bodyLines, photos));
 }
 let messaging = null;
 try{
@@ -4074,20 +4077,21 @@ async function handleTaskCompletePhotoInput(id, inputEl){
 window.handleTaskCompletePhotoInput = handleTaskCompletePhotoInput;
 
 async function toggleTaskComplete(id, makeComplete){
+  let stagedPhotos = [];
   try{
     const update = { completed: makeComplete };
     if(makeComplete){
       update.completedByName = currentSession.name;
       update.completedByUsername = currentSession.username;
       update.completedAt = firebase.firestore.FieldValue.serverTimestamp();
-      const staged = (taskCompletionStaging[id] || []).map(p => p.preview);
-      if(staged.length){
-        const stagedBytes = staged.reduce((sum, p) => sum + p.length, 0);
+      stagedPhotos = (taskCompletionStaging[id] || []).map(p => p.preview);
+      if(stagedPhotos.length){
+        const stagedBytes = stagedPhotos.reduce((sum, p) => sum + p.length, 0);
         if(stagedBytes > MAX_ENTRY_PHOTOS_BYTES){
           alert('These photos are too large to sync. Please remove one and try again.');
           return;
         }
-        update.completionPhotos = firebase.firestore.FieldValue.arrayUnion(...staged);
+        update.completionPhotos = firebase.firestore.FieldValue.arrayUnion(...stagedPhotos);
       }
     } else {
       update.completedByName = null;
@@ -4118,8 +4122,9 @@ async function toggleTaskComplete(id, makeComplete){
           `<strong>Completed by:</strong> ${escapeHtml(currentSession.name)} (${escapeHtml(currentSession.roleLabel)})`,
           lastComment ? `<strong>Latest update:</strong> ${escapeHtml(lastComment.text || '')}` : ''
         ];
-        notifySiteRecipients(subject, lines);
-        (task.notifyEmails || []).forEach(addr => sendSummaryEmail(addr, subject, lines));
+        const emailPhotos = [...(task.photos || []), ...stagedPhotos, ...(task.completionPhotos || [])].slice(0, MAX_PHOTOS_PER_ENTRY);
+        notifySiteRecipients(subject, lines, emailPhotos);
+        (task.notifyEmails || []).forEach(addr => sendSummaryEmail(addr, subject, lines, emailPhotos));
       }
     }
   }catch(err){
