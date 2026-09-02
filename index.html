@@ -5542,6 +5542,129 @@ function renderWorkerTaskHistory(username){
   `).join('');
 }
 
+function buildWorkerAttendanceRows(username){
+  return workingLocations
+    .filter(l => l.workerUsername === username)
+    .sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt))
+    .map(l => {
+      const s = l.createdAt && l.createdAt.toDate ? l.createdAt.toDate() : null;
+      const e = (l.finishedAt && l.finishedAt.toDate) ? l.finishedAt.toDate() : null;
+      return {
+        'Date': s ? s.toLocaleDateString('en-GB') : '',
+        'Level': l.level || '',
+        'Description': l.description || '',
+        'Check In': s ? s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        'Check Out': e ? e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (l.active === false ? '' : 'Still checked in'),
+        'Duration': formatDuration(sessionDurationMs(l))
+      };
+    });
+}
+
+function buildWorkerTaskRows(worker){
+  const relevant = tasks.filter(t => t.targetUsername === worker.username || (!t.targetUsername && (t.targetRole || 'labourer') === worker.trade));
+  return relevant
+    .sort((a, b) => tsOf(b.createdAt) - tsOf(a.createdAt))
+    .map(t => {
+      const created = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
+      const startedAt = t.startedAt && t.startedAt.toDate ? t.startedAt.toDate() : null;
+      const completedAt = (t.completed && t.completedAt && t.completedAt.toDate) ? t.completedAt.toDate() : null;
+      let duration = '';
+      if(completedAt){
+        const beganAt = startedAt || created;
+        if(beganAt) duration = formatDuration(Math.max(0, completedAt - beganAt));
+      }
+      return {
+        'Date': created ? created.toLocaleDateString('en-GB') : '',
+        'Task': t.message || '',
+        'Assigned By': t.assignedByName || '',
+        'Status': t.completed ? 'Completed' : 'Active',
+        'Started': startedAt ? startedAt.toLocaleString() : (completedAt ? 'Never started' : ''),
+        'Completed': completedAt ? completedAt.toLocaleString() : '',
+        'Duration': duration
+      };
+    });
+}
+
+function buildWorkerResponseRows(username){
+  const responses = [];
+  tasks.forEach(t => {
+    (t.comments || []).forEach(c => {
+      if(c.authorUsername === username) responses.push({ taskMessage: t.message, ...c });
+    });
+  });
+  responses.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+  return responses.map(r => ({
+    'Date': isNaN(new Date(r.dateTime)) ? r.dateTime : new Date(r.dateTime).toLocaleString(),
+    'Task': r.taskMessage || '',
+    'Response': r.text || (r.photo ? '(photo attached)' : '')
+  }));
+}
+
+function downloadWorkerReportPdf(username){
+  const w = workers.find(x => x.username === username);
+  if(!w) return;
+  const doc = new jspdf.jsPDF({ orientation: 'landscape' });
+  const marginX = 14;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let y = 16;
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text(`Delmond Site Log — Worker Report: ${w.name}`, marginX, y);
+  y += 7;
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(100);
+  doc.text(`${TRADE_LABELS[w.trade] || w.trade}${w.active === false ? ' · Inactive' : ''} · Generated ${new Date().toLocaleString()}`, marginX, y);
+  doc.setTextColor(0);
+
+  const attendanceRows = buildWorkerAttendanceRows(username);
+  const taskRows = buildWorkerTaskRows(w);
+  const responseRows = buildWorkerResponseRows(username);
+  const totalHoursMs = workingLocations.filter(l => l.workerUsername === username).reduce((sum, l) => sum + sessionDurationMs(l), 0);
+
+  y += 6;
+  doc.setFontSize(10);
+  doc.text(`Total logged hours: ${formatDuration(totalHoursMs)}   ·   Check-ins: ${attendanceRows.length}   ·   Tasks: ${taskRows.length}   ·   Responses: ${responseRows.length}`, marginX, y);
+
+  let nextY = y + 10;
+
+  const addSection = (title, rows) => {
+    if(nextY > pageHeight - 30){
+      doc.addPage();
+      nextY = 16;
+    }
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(title, marginX, nextY);
+    nextY += 5;
+    if(rows.length === 0){
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'italic');
+      doc.text('No activity recorded.', marginX, nextY + 4);
+      nextY += 14;
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    const body = rows.map(r => headers.map(h => String(r[h] ?? '')));
+    doc.autoTable({
+      startY: nextY,
+      head: [headers],
+      body,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [31, 42, 84] },
+      margin: { left: marginX, right: marginX }
+    });
+    nextY = doc.lastAutoTable.finalY + 10;
+  };
+
+  addSection('Attendance History', attendanceRows);
+  addSection('Task Activity', taskRows);
+  addSection('Task Responses', responseRows);
+
+  doc.save(`Delmond Worker Report - ${w.name}.pdf`);
+}
+window.downloadWorkerReportPdf = downloadWorkerReportPdf;
+
 function renderFinishedLocations(){
   const container = document.getElementById('finishedLocationsList');
   if(!container) return;
@@ -5656,6 +5779,7 @@ function renderTeam(){
           <div class="contact-name">${escapeHtml(w.name)}${inactiveBadge}</div>
           <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusLine}</div>
         </div>
+        <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); downloadWorkerReportPdf('${w.username}')" title="Download full report">📄 PDF</button>
         <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
       </div>
     `;
