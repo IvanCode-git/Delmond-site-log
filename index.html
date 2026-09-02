@@ -31,6 +31,12 @@
     position:sticky; top:0; z-index:150; box-shadow:0 1px 3px rgba(0,0,0,.12);
   }
   header h1{margin:0; font-size:17px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:8px;}
+  #syncBanner{
+    padding:9px 20px; font-size:13px; font-weight:600; text-align:center;
+    display:none; align-items:center; justify-content:center; gap:6px;
+  }
+  #syncBanner.offline{background:var(--warn-bg); color:var(--warn);}
+  #syncBanner.syncing{background:var(--accent-light); color:var(--accent);}
   .container{max-width:900px; margin:0 auto; padding:16px 16px 92px;}
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
@@ -455,6 +461,8 @@
     <button id="lockBtn" class="small">🔓 Log Out</button>
   </div>
 </header>
+
+<div id="syncBanner" style="display:none;"></div>
 
 <div class="container">
 
@@ -920,6 +928,7 @@
         <div class="photo-grid" id="requestPhotoPreview"></div>
       </div>
       <button type="button" id="submitRequestBtn">Send Request</button>
+      <div id="requestSubmitStatus" style="display:none; font-size:12px; font-weight:700; margin-top:8px;"></div>
     </div>
 
     <div class="card">
@@ -1154,6 +1163,30 @@ const db = firebase.firestore();
 db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
   console.warn('Offline persistence not enabled:', err.code);
 });
+
+// ---- Offline support: writes made offline are queued locally by Firestore's persistence
+// above and sent automatically on reconnect. This banner just keeps people informed. ----
+let pendingSyncCount = 0;
+function updateSyncBanner(){
+  const banner = document.getElementById('syncBanner');
+  if(!banner) return;
+  if(!navigator.onLine){
+    banner.className = 'offline';
+    banner.style.display = 'flex';
+    banner.textContent = pendingSyncCount > 0
+      ? `📴 Offline — ${pendingSyncCount} report${pendingSyncCount === 1 ? '' : 's'} saved on this device and waiting to send.`
+      : "📴 You're offline — anything you submit will be saved here and sent automatically once you're back online.";
+  } else if(pendingSyncCount > 0){
+    banner.className = 'syncing';
+    banner.style.display = 'flex';
+    banner.textContent = `🔄 Sending ${pendingSyncCount} saved report${pendingSyncCount === 1 ? '' : 's'}…`;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+window.addEventListener('online', updateSyncBanner);
+window.addEventListener('offline', updateSyncBanner);
+updateSyncBanner();
 
 const VAPID_PUBLIC_KEY = 'BFeXCGaOmDZVD_3-EkfXH1Dq7BlmLoTREN8MDo_5Sw731KctZ-jmNT4222lFHjzkkpq_sCf_gvrv_wU16BlQ5pE';
 const NOTIFY_WORKER_URL = 'https://falling-feather-a1ce.ivannedkov1309.workers.dev/';
@@ -2415,9 +2448,13 @@ function switchToSite(siteId, retriesLeft){
     renderTasks();
   }, handleSyncError);
 
-  siteListenerUnsubs.requests = siteCollection('entryRequests').onSnapshot((snapshot) => {
-    entryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  siteListenerUnsubs.requests = siteCollection('entryRequests').onSnapshot({ includeMetadataChanges: true }, (snapshot) => {
+    entryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data(), _pending: doc.metadata.hasPendingWrites }));
     renderRequests();
+    pendingSyncCount = currentSession
+      ? entryRequests.filter(r => r._pending && r.submittedByUsername === currentSession.username).length
+      : 0;
+    updateSyncBanner();
   }, handleSyncError);
 
   siteListenerUnsubs.messages = siteCollection('messages').onSnapshot((snapshot) => {
@@ -2468,8 +2505,13 @@ auth.onAuthStateChanged((user) => {
   }
 });
 auth.signInAnonymously().catch((err) => {
-  console.error('Anonymous sign-in failed', err);
-  alert('Could not connect to the shared site log: ' + err.message);
+  console.warn('Anonymous sign-in failed', err);
+  // If we're offline and already have a locally-persisted session, this is expected —
+  // onAuthStateChanged already let the user into the app from the local cache above,
+  // so don't show a scary blocking alert for something that isn't actually blocking them.
+  if(navigator.onLine || !auth.currentUser){
+    alert('Could not connect to the shared site log: ' + err.message);
+  }
 });
 
 function fileToDataUrl(file){
@@ -4065,6 +4107,17 @@ document.getElementById('submitRequestBtn').onclick = async () => {
     renderRequestPhotoPreview();
     resetRequestPlanUpload();
     sendPushNotification(['pm', 'supervisor', 'engineer'], `New entry request from ${currentSession.name}`, notes.slice(0, 120) || 'Open the app to see details');
+
+    const statusEl = document.getElementById('requestSubmitStatus');
+    statusEl.style.display = 'block';
+    if(navigator.onLine){
+      statusEl.style.color = 'var(--ok, #16794d)';
+      statusEl.textContent = '✅ Sent!';
+    } else {
+      statusEl.style.color = 'var(--warn)';
+      statusEl.textContent = "💾 Saved on this device — it'll send automatically once you're back online.";
+    }
+    setTimeout(() => { statusEl.style.display = 'none'; }, navigator.onLine ? 3000 : 8000);
   }catch(err){
     alert('Failed to send request: ' + err.message);
   }finally{
@@ -4110,7 +4163,7 @@ function renderRequestCard(r, showActions, listKey){
   return `
     <div class="entry-item">
       <div class="entry-detail open">
-        <div class="entry-tags"><span class="type-tag type-${r.type}">${typeLabel(r.type)}</span> &nbsp;${dtStr} ${requestStatusBadge(r.status)}</div>
+        <div class="entry-tags"><span class="type-tag type-${r.type}">${typeLabel(r.type)}</span> &nbsp;${dtStr} ${requestStatusBadge(r.status)} ${r._pending ? `<span class="status-badge pending" title="Saved on this device, not sent to the server yet">⏳ Not sent yet</span>` : ''}</div>
         <div style="font-size:12px; color:var(--muted); margin:-4px 0 6px;">From: ${escapeHtml(r.submittedByName || 'Unknown')}</div>
         ${locationHtml}
         ${planHtml}
