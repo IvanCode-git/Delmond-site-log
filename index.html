@@ -689,8 +689,8 @@
       </div>
 
       <div class="field">
-        <label>Photos</label>
-        <input type="file" id="photoInput" accept="image/*" multiple>
+        <label>Photos / PDF</label>
+        <input type="file" id="photoInput" accept="image/*,.pdf" multiple>
         <div class="photo-grid" id="photoPreview"></div>
       </div>
 
@@ -833,8 +833,8 @@
         <input type="text" id="taskNotifyEmails" placeholder="e.g. client@example.com, pm@maincontractor.com" autocomplete="off">
       </div>
       <div class="field">
-        <label>Photos (optional)</label>
-        <input type="file" id="taskPhotoInput" accept="image/*" multiple>
+        <label>Photos / PDF (optional)</label>
+        <input type="file" id="taskPhotoInput" accept="image/*,.pdf" multiple>
         <div class="photo-grid" id="taskPhotoPreview"></div>
       </div>
       <button type="button" id="assignTaskBtn">Send Task</button>
@@ -934,8 +934,8 @@
         <textarea id="requestNotes" placeholder="Describe what happened..."></textarea>
       </div>
       <div class="field">
-        <label>Photos (optional)</label>
-        <input type="file" id="requestPhotoInput" accept="image/*" multiple>
+        <label>Photos / PDF (optional)</label>
+        <input type="file" id="requestPhotoInput" accept="image/*,.pdf" multiple>
         <div class="photo-grid" id="requestPhotoPreview"></div>
       </div>
       <button type="button" id="submitRequestBtn">Send Request</button>
@@ -3439,7 +3439,8 @@ async function addPhotosToArray(files, targetArray, renderFn){
       break;
     }
     try{
-      const canvas = await fileToCanvas(f);
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const canvas = isPdf ? await renderPdfFirstPageToCanvas(f) : await fileToCanvas(f);
       const dataUrl = canvasToResizedJpeg(canvas, PHOTO_MAX_WIDTH, PHOTO_JPEG_QUALITY);
       targetArray.push({ file: null, preview: dataUrl });
     }catch(err){
