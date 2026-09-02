@@ -387,9 +387,10 @@
   }
 
   .level-row{
-    display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);
+    display:flex; flex-direction:column; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);
   }
   .level-row:last-child{border-bottom:none;}
+  .level-row-top{display:flex; align-items:center; gap:10px;}
   .level-thumb{
     width:44px; height:33px; border-radius:8px; border:1px solid var(--border); flex-shrink:0;
     background-size:cover; background-position:center; background-color:#f4f5f7;
@@ -402,6 +403,16 @@
     padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer;
   }
   .level-upload-label input{display:none;}
+  .level-drawings-list{display:flex; flex-wrap:wrap; gap:8px; padding-left:54px;}
+  .level-drawing-thumb{
+    position:relative; width:60px; height:45px; border-radius:8px; border:1px solid var(--border);
+    background-size:cover; background-position:center; background-color:#f4f5f7; flex-shrink:0;
+  }
+  .level-drawing-remove{
+    position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%;
+    background:var(--danger); color:#fff; border:2px solid #fff; font-size:12px; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;
+  }
 </style>
 </head>
 <body>
@@ -1770,19 +1781,24 @@ populateLevelSelect(document.getElementById('locationLevel'));
 function renderLevelsManager(){
   const container = document.getElementById('levelsManagerList');
   container.innerHTML = levelsList.map(lvl => {
-    const planSrc = getPlanForLevel(lvl);
-    const thumbStyle = planSrc ? `background-image:url('${planSrc}');` : '';
-    const thumbText = planSrc ? '' : 'No drawing';
-    const removeDrawingBtn = planSrc ? `<button type="button" class="secondary small remove-drawing-btn">Remove Drawing</button>` : '';
+    const images = customLevelPlans[lvl] || [];
+    const drawingsHtml = images.length
+      ? `<div class="level-drawings-list">${images.map((img, i) => `
+          <div class="level-drawing-thumb" style="background-image:url('${img}');">
+            <button type="button" class="level-drawing-remove" data-drawing-index="${i}" title="Remove this drawing">×</button>
+          </div>
+        `).join('')}</div>`
+      : `<div class="level-drawings-list"><div class="level-thumb">No drawing</div></div>`;
     return `
       <div class="level-row" data-level="${escapeHtml(lvl)}">
-        <div class="level-thumb" style="${thumbStyle}">${thumbText}</div>
-        <div class="level-row-name">${escapeHtml(lvl)}</div>
-        <div class="level-row-actions">
-          <label class="level-upload-label">Upload<input type="file" accept="image/*,.pdf" class="level-upload-input"></label>
-          ${removeDrawingBtn}
-          <button type="button" class="danger small remove-level-btn">×</button>
+        <div class="level-row-top">
+          <div class="level-row-name">${escapeHtml(lvl)}${images.length > 1 ? ` <span style="font-weight:400; color:var(--muted);">(${images.length} drawings)</span>` : ''}</div>
+          <div class="level-row-actions">
+            <label class="level-upload-label">Upload<input type="file" accept="image/*,.pdf" class="level-upload-input" multiple></label>
+            <button type="button" class="danger small remove-level-btn">×</button>
+          </div>
         </div>
+        ${drawingsHtml}
       </div>
     `;
   }).join('');
@@ -1792,8 +1808,9 @@ document.getElementById('levelsManagerList').addEventListener('change', (ev) => 
   if(!ev.target.classList.contains('level-upload-input')) return;
   const row = ev.target.closest('.level-row');
   const levelName = row.dataset.level;
-  const file = ev.target.files[0];
-  if(file) handleLevelPlanUpload(levelName, file, row);
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = '';
+  if(files.length) handleLevelPlanUpload(levelName, files, row);
 });
 
 document.getElementById('levelsManagerList').addEventListener('click', async (ev) => {
@@ -1802,12 +1819,12 @@ document.getElementById('levelsManagerList').addEventListener('click', async (ev
     removeLevel(row.dataset.level);
     return;
   }
-  if(ev.target.classList.contains('remove-drawing-btn')){
+  if(ev.target.classList.contains('level-drawing-remove')){
     const row = ev.target.closest('.level-row');
     const levelName = row.dataset.level;
-    if(!confirm(`Remove the saved drawing for "${levelName}"? This removes it for everyone.`)) return;
-    delete customLevelPlans[levelName];
-    await deleteLevelPlanDoc(levelName);
+    const index = Number(ev.target.dataset.drawingIndex);
+    if(!confirm(`Remove this drawing for "${levelName}"? This removes it for everyone.`)) return;
+    await removeLevelPlanImageAt(levelName, index);
     renderLevelsManager();
     renderEntries();
   }
@@ -1978,21 +1995,27 @@ async function processLevelPlanFile(file){
   return canvasToResizedJpeg(cropped, 1100);
 }
 
-async function handleLevelPlanUpload(levelName, file, row){
-  const thumb = row.querySelector('.level-thumb');
-  const prevHtml = thumb.innerHTML;
-  thumb.innerHTML = '…';
+async function handleLevelPlanUpload(levelName, files, row){
+  const prevText = row.querySelector('.level-upload-label').firstChild.textContent;
+  const setLabel = (text) => {
+    const label = document.querySelector(`.level-row[data-level="${CSS.escape(levelName)}"] .level-upload-label`);
+    if(label) label.firstChild.textContent = text;
+  };
   try{
-    const dataUrl = await processLevelPlanFile(file);
-    await addLevelPlanImage(levelName, dataUrl);
-    renderLevelsManager();
-    renderEntries();
+    for(const file of files){
+      setLabel('Uploading…');
+      const dataUrl = await processLevelPlanFile(file);
+      await addLevelPlanImage(levelName, dataUrl);
+      renderLevelsManager();
+      renderEntries();
+    }
     if(document.getElementById('entryLevel').value === levelName){
       loadLevelPlan(levelName);
     }
   }catch(err){
     alert('Could not process that file: ' + err.message);
-    thumb.innerHTML = prevHtml;
+  }finally{
+    setLabel(prevText);
   }
 }
 
