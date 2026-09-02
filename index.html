@@ -142,6 +142,19 @@
     display:flex; align-items:center; justify-content:center; text-decoration:none;
   }
   .entry-hero-tile .entry-photo-download{bottom:16px; right:6px; width:34px; height:34px; font-size:16px;}
+  .photo-lightbox{
+    position:fixed; inset:0; background:rgba(10,12,24,.92); z-index:2000;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .photo-lightbox.open{display:flex;}
+  .photo-lightbox img{max-width:100%; max-height:100%; border-radius:8px; box-shadow:var(--shadow-md);}
+  .photo-lightbox-close, .photo-lightbox-download{
+    position:absolute; top:16px; width:40px; height:40px; border-radius:50%;
+    background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.3);
+    display:flex; align-items:center; justify-content:center; font-size:18px; text-decoration:none; cursor:pointer;
+  }
+  .photo-lightbox-close{right:16px;}
+  .photo-lightbox-download{right:66px;}
   audio{width:100%; margin-top:8px;}
   .rec-row{display:flex; align-items:center; gap:10px; margin-top:6px;}
   .rec-dot{width:10px; height:10px; border-radius:50%; background:var(--danger); display:none;}
@@ -2902,19 +2915,36 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-// Photos/PDFs are stored as data URLs. window.open() on a data URL is unreliable on
-// mobile (especially installed PWAs), so photos are wrapped in a real <a> (opens in a
-// new tab/context reliably everywhere) plus an explicit download button.
+// Photos/PDFs are stored as data URLs. Chrome (and other Chromium browsers) block
+// top-level navigation to data: URLs outright, so an <a target="_blank"> silently does
+// nothing for a large share of users. Tapping a photo instead opens it in an in-page
+// lightbox (no navigation involved, so nothing to block), plus a separate download
+// button using the `download` attribute, which is a different, unrestricted code path.
 function photoFilename(dataUrl, index){
   const ext = /^data:image\/png/.test(dataUrl) ? 'png' : 'jpg';
   return `photo-${(index || 0) + 1}.${ext}`;
 }
 
+function openPhotoLightbox(src){
+  document.getElementById('photoLightboxImg').src = src;
+  const dl = document.getElementById('photoLightboxDownload');
+  dl.href = src;
+  dl.download = photoFilename(src, 0);
+  document.getElementById('photoLightbox').classList.add('open');
+}
+window.openPhotoLightbox = openPhotoLightbox;
+
+function closePhotoLightbox(){
+  document.getElementById('photoLightbox').classList.remove('open');
+  document.getElementById('photoLightboxImg').src = '';
+}
+window.closePhotoLightbox = closePhotoLightbox;
+
 function photoThumbHtml(dataUrl, index){
   const filename = photoFilename(dataUrl, index);
   return `
     <div class="entry-photo-tile">
-      <a href="${dataUrl}" target="_blank" rel="noopener"><img src="${dataUrl}"></a>
+      <img src="${dataUrl}" onclick="openPhotoLightbox(this.src)">
       <a class="entry-photo-download" href="${dataUrl}" download="${filename}" title="Download">⬇</a>
     </div>
   `;
@@ -2924,7 +2954,7 @@ function heroPhotoHtml(dataUrl){
   const filename = photoFilename(dataUrl, 0);
   return `
     <div class="entry-hero-tile">
-      <a href="${dataUrl}" target="_blank" rel="noopener"><img class="entry-hero-photo" src="${dataUrl}"></a>
+      <img class="entry-hero-photo" src="${dataUrl}" onclick="openPhotoLightbox(this.src)">
       <a class="entry-photo-download" href="${dataUrl}" download="${filename}" title="Download">⬇</a>
     </div>
   `;
@@ -5834,6 +5864,12 @@ const todayStr = nowLocalDateTimeValue().slice(0, 10);
   if(el) el.value = todayStr;
 });
 </script>
+
+<div class="photo-lightbox" id="photoLightbox" onclick="if(event.target === this) closePhotoLightbox();">
+  <a class="photo-lightbox-download" id="photoLightboxDownload" href="#" download title="Download">⬇</a>
+  <button type="button" class="photo-lightbox-close" onclick="closePhotoLightbox()" title="Close">×</button>
+  <img id="photoLightboxImg" src="" alt="">
+</div>
 
 </body>
 </html>
