@@ -350,7 +350,7 @@
     position:absolute; bottom:-1px; right:-1px; width:13px; height:13px; border-radius:50%; border:2.5px solid #fff;
   }
   .contact-info{flex:1; min-width:0;}
-  .contact-name{font-weight:700; font-size:14px;}
+  .contact-name{font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .contact-preview{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .contact-meta{font-size:11px; color:var(--muted); text-align:right; flex-shrink:0;}
   .unread-count{
@@ -5771,14 +5771,18 @@ function renderTeam(){
     }
 
     const isEditingTrade = editingWorkerTradeUsername === w.username;
-    const editTradeHtml = isEditingTrade ? `
-        <select onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeWorkerTrade('${w.username}', this.value)" style="padding:5px 6px; border-radius:6px; border:1px solid var(--border); font-size:13px; flex-shrink:0;">
+    const rightControlsHtml = isEditingTrade ? `
+        <select onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeWorkerTrade('${w.username}', this.value)" style="padding:5px 6px; border-radius:6px; border:1px solid var(--border); font-size:13px; flex-shrink:0; max-width:110px;">
           <option value="labourer" ${w.trade === 'labourer' ? 'selected' : ''}>Labourer</option>
           <option value="fixers" ${w.trade === 'fixers' ? 'selected' : ''}>Fixer</option>
           <option value="jointers" ${w.trade === 'jointers' ? 'selected' : ''}>Jointer</option>
         </select>
         <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); cancelEditWorkerTrade();" title="Cancel">✕</button>
-      ` : `<button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); startEditWorkerTrade('${w.username}');" title="Edit trade">✏️ Edit</button>`;
+      ` : `
+        <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); startEditWorkerTrade('${w.username}');" title="Edit trade">✏️ Edit</button>
+        <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); downloadWorkerReportPdf('${w.username}')" title="Download full report">📄 PDF</button>
+        <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
+      `;
 
     return `
       <div class="contact-row${neverCheckedIn && w.active !== false ? ' flag-attention' : ''}" onclick="openWorkerProfile('${w.username}')">
@@ -5790,9 +5794,7 @@ function renderTeam(){
           <div class="contact-name">${escapeHtml(w.name)}${inactiveBadge}</div>
           <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusLine}</div>
         </div>
-        ${editTradeHtml}
-        <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); downloadWorkerReportPdf('${w.username}')" title="Download full report">📄 PDF</button>
-        <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
+        ${rightControlsHtml}
       </div>
     `;
   }).join('');
