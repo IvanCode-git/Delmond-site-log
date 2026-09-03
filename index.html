@@ -2383,6 +2383,7 @@ let workers = [];
 let locationRequests = [];
 let activeTeamTradeFilter = 'all';
 let activeWorkerProfileUsername = null;
+let editingWorkerTradeUsername = null;
 const TRADE_LABELS = { labourer: 'Labourer', fixers: 'Fixer', jointers: 'Jointer' };
 const TRADE_COLORS = { labourer: '#7c3aed', fixers: '#2563eb', jointers: '#0891b2' };
 function tradeColor(trade){ return TRADE_COLORS[trade] || '#6b7280'; }
@@ -5769,6 +5770,16 @@ function renderTeam(){
       }
     }
 
+    const isEditingTrade = editingWorkerTradeUsername === w.username;
+    const editTradeHtml = isEditingTrade ? `
+        <select onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeWorkerTrade('${w.username}', this.value)" style="padding:5px 6px; border-radius:6px; border:1px solid var(--border); font-size:13px; flex-shrink:0;">
+          <option value="labourer" ${w.trade === 'labourer' ? 'selected' : ''}>Labourer</option>
+          <option value="fixers" ${w.trade === 'fixers' ? 'selected' : ''}>Fixer</option>
+          <option value="jointers" ${w.trade === 'jointers' ? 'selected' : ''}>Jointer</option>
+        </select>
+        <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); cancelEditWorkerTrade();" title="Cancel">✕</button>
+      ` : `<button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); startEditWorkerTrade('${w.username}');" title="Edit trade">✏️ Edit</button>`;
+
     return `
       <div class="contact-row${neverCheckedIn && w.active !== false ? ' flag-attention' : ''}" onclick="openWorkerProfile('${w.username}')">
         <div class="roster-avatar-wrap">
@@ -5779,6 +5790,7 @@ function renderTeam(){
           <div class="contact-name">${escapeHtml(w.name)}${inactiveBadge}</div>
           <div class="contact-preview">${escapeHtml(TRADE_LABELS[w.trade] || w.trade)} · ${statusLine}</div>
         </div>
+        ${editTradeHtml}
         <button type="button" class="secondary small" style="flex-shrink:0;" onclick="event.stopPropagation(); downloadWorkerReportPdf('${w.username}')" title="Download full report">📄 PDF</button>
         <span style="color:var(--muted); font-size:22px; flex-shrink:0;">›</span>
       </div>
@@ -5861,6 +5873,30 @@ function renderWorkerProfile(){
     <div class="comments-list">${renderWorkerTaskHistory(w.username)}</div>
   `;
 }
+
+function startEditWorkerTrade(username){
+  editingWorkerTradeUsername = username;
+  renderTeam();
+}
+window.startEditWorkerTrade = startEditWorkerTrade;
+
+function cancelEditWorkerTrade(){
+  editingWorkerTradeUsername = null;
+  renderTeam();
+}
+window.cancelEditWorkerTrade = cancelEditWorkerTrade;
+
+async function changeWorkerTrade(username, newTrade){
+  try{
+    await siteCollection('workers').doc(username).update({ trade: newTrade });
+  }catch(err){
+    alert('Failed to update trade: ' + err.message);
+  }finally{
+    editingWorkerTradeUsername = null;
+    renderTeam();
+  }
+}
+window.changeWorkerTrade = changeWorkerTrade;
 
 async function toggleWorkerActive(username, makeActive){
   try{
